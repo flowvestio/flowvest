@@ -1,0 +1,94 @@
+// assets/app/read.js
+(function(){
+  let claimableVestIds = [];
+  function getClaimableVestIds(){ return claimableVestIds.slice(); }
+
+  // 扫描最近 N 条：计算 totalDue + 选一个 vestId（优先 beneficiary，否则 owner）
+  async function scanClaimableAndPick(flow, addr){
+    claimableVestIds = [];
+
+    const vcBN = await flow.vestCount();
+    const count = vcBN.toNumber ? vcBN.toNumber() : Number(vcBN);
+    if (!count || count <= 0) return { totalDue: ethers.constants.Zero, pickedStartAt: null };
+
+    const N = 25;
+    const start = Math.max(1, count - N + 1);
+
+    let totalDue = ethers.constants.Zero;
+
+    // 选 timeline 的 startAt（这里只返回 startAt，不渲染 timeline）
+    let chosenBen = null;   // newest beneficiary==addr
+    let chosenOwner = null; // newest owner==addr
+
+    for (let id = count; id >= start; id--){
+      try{
+        const v = await flow.vests(id);
+
+        const benOk = v.beneficiary && v.beneficiary.toLowerCase() === addr.toLowerCase();
+        const ownerOk = v.owner && v.owner.toLowerCase() === addr.toLowerCase();
+
+        if (!chosenBen && benOk){
+          chosenBen = Number(v.startAt.toString());
+        }
+        if (!chosenOwner && ownerOk){
+          chosenOwner = Number(v.startAt.toString());
+        }
+
+        if (benOk && !v.terminated){
+          const due = await flow.dueAmount(id);
+          if (due.gt(0)){
+            claimableVestIds.push(id);
+            totalDue = totalDue.add(due);
+          }
+        }
+      }catch(_e){}
+    }
+
+    return { totalDue, pickedStartAt: (chosenBen || chosenOwner) };
+  }
+
+  async function refreshAll(state){
+    if (!state?.signer || !state?.addr || !state?.flow || !state?.usdc) return;
+
+    await WALLET.refreshNetworkInfo();
+
+    const { flow, usdc, addr } = state;
+
+    // protocol
+    const tvl = await flow.totalPrincipal();
+    const vc  = await flow.vestCount();
+    UI.setText("kpiTVL", UI.fmtUnits(tvl, C.DEC) + " USDC");
+    UI.setText("kpiVestCount", vc.toString());
+
+    // utilization (human units)
+    const tvlUSDC = Number(UI.fmtUnits(tvl, C.DEC));
+    const usagePct = C.TVL_CAP_USDC > 0 ? (tvlUSDC / C.TVL_CAP_USDC) * 100 : 0;
+    UI.setText("kpiUsage", usagePct.toFixed(2) + "%");
+
+    // balance
+    const bal = await usdc.balanceOf(addr);
+    UI.setText("kpiBalance", UI.fmtUnits(bal, C.DEC) + " USDC");
+
+    // claimable
+    const { totalDue } = await scanClaimableAndPick(flow, addr);
+    UI.setText("kpiDue", UI.fmtUnits(totalDue, C.DEC) + " USDC");
+    UI.setText("kpiDueHint",
+      claimableVestIds.length
+        ? `Claimable vests: #${claimableVestIds.join(", #")}`
+        : "No claimable vests in last scan."
+    );
+
+    // claim button enabled only if has claimable
+    const btnClaim = UI.$("btnClaim");
+    if (btnClaim) btnClaim.disabled = claimableVestIds.length === 0;
+
+    // creator button visibility
+    const btnCreator = UI.$("btnCreator");
+    if (btnCreator){
+      const isCreator = addr.toLowerCase() === C.CREATOR_ADDR;
+      btnCreator.classList.toggle("hidden", !isCreator);
+    }
+  }
+
+  window.READ = { refreshAll, getClaimableVestIds, scanClaimableAndPick };
+})();

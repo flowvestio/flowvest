@@ -4,7 +4,7 @@ Flowvest is a simple family vesting / revocable trust-like tool built on Web3.
 This repo contains a static frontend (no build step) and optional backend helpers.
 
 ## Frontend
-Location: `frontend/`
+Location: `root (index.html)
 
 ### Run locally
 Just open:

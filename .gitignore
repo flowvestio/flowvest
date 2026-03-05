@@ -1,0 +1,15 @@
+# mac
+.DS_Store
+
+# vim
+*.swp
+*.swo
+
+# node
+node_modules/
+
+# env
+.env
+
+# logs
+*.log

@@ -1,0 +1,32 @@
+.hidden {
+  display: none;
+}
+
+#walletMenu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  min-width: 180px;
+  background: #07152f;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  padding: 8px;
+  z-index: 1000;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+}
+
+#walletMenu button {
+  width: 100%;
+  display: block;
+  text-align: left;
+  background: transparent;
+  color: #fff;
+  border: none;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+#walletMenu button:hover {
+  background: rgba(255,255,255,0.08);
+}

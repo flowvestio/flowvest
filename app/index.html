@@ -1,0 +1,295 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Flowvest V1</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+</head>
+
+<!-- body -->
+<body class="bg-slate-950 text-slate-100">
+  <div class="max-w-3xl mx-auto px-4 py-6">
+
+    <!-- Header -->
+    <div class="flex items-start justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <img src="/assets/logo/flowvest-logo.png" class="h-10 w-10 rounded-2xl border border-slate-800" alt="Flowvest" />
+        <div>
+          <div class="text-xl font-extrabold tracking-tight">Flowvest V1</div>
+          <div id="metaLine" class="text-sm text-slate-400 mt-1">Base Sepolia · USDC · PERIOD=60s · TOTAL=3</div>
+          <p class="mt-2 text-xs text-amber-400">Flowvest V1 is currently in Public Beta</p>
+          <p class="mt-2 text-xs text-amber-400">Use small test USDC amounts and verify transactions carefully.</p>
+        </div>
+      </div>
+
+      <!-- Connect wallet -->
+      <div class="ml-auto relative w-fit">
+        <button
+          id="btnWallet"
+          type="button"
+          class="px-5 py-3 rounded-2xl font-semibold text-lg bg-emerald-600 hover:bg-emerald-500 transition shadow-lg disabled:opacity-40"
+        >
+          Connect Wallet
+        </button>
+
+        <div
+          id="walletMenu"
+          class="hidden absolute right-0 top-full mt-3 w-44 bg-slate-900 border border-white/10 rounded-xl shadow-xl z-50"
+        >
+          <button
+            id="btnCopyAddress"
+            type="button"
+            class="block w-full text-left px-4 py-2 hover:bg-white/10 rounded-t-xl"
+          >
+            Copy Address
+          </button>
+
+          <button
+            id="btnViewExplorer"
+            type="button"
+            class="block w-full text-left px-4 py-2 hover:bg-white/10"
+          >
+            View Explorer
+          </button>
+
+          <button
+            id="btnDisconnect"
+            type="button"
+            class="block w-full text-left px-4 py-2 hover:bg-white/10 rounded-b-xl"
+          >
+            Disconnect
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Status line -->
+    <div class="rounded-2xl border border-slate-800 bg-slate-950/30 p-5 mt-4">
+      <div class="flex flex-col md:flex-row md:items-center gap-4 md:gap-6">
+        <div>
+          <div class="text-sm text-slate-400">
+            Network: <span id="networkLabel" class="text-white">—</span>
+          </div>
+          <div class="text-sm text-slate-400 mt-1">
+            Wallet: <span id="walletLabel" class="font-mono text-blue-400">—</span>
+          </div>
+        </div>
+
+        <a
+          id="scanBtn"
+          href="https://scan.flowvest.io"
+          target="_blank"
+          class="inline-flex w-fit px-4 py-2 rounded-lg border border-slate-700 text-sm text-slate-300 hover:bg-slate-800 transition"
+        >
+          View On Flowvest Scan ↗
+        </a>
+      </div>
+    </div>
+
+    <!-- Contract info -->
+    <div class="mt-4 rounded-2xl border border-slate-800 bg-slate-900/40 p-4 space-y-2 text-sm">
+      <div><span class="text-slate-400">Flowvest:</span> <span id="flowAddr" class="font-mono break-all">—</span></div>
+      <div><span class="text-slate-400">Base Sepolia USDC:</span> <span id="usdcAddr" class="font-mono break-all">—</span></div>
+    </div>
+
+    <!-- KPI row 1 -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+      <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 hover:bg-slate-900/70 transition">
+        <div class="text-xs text-slate-400">Protocol TVL</div>
+        <div id="kpiTVL" class="mt-2 text-3xl font-semibold">—</div>
+      </div>
+      <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 hover:bg-slate-900/70 transition">
+        <div class="text-xs text-slate-400">Total Vests</div>
+        <div id="kpiVestCount" class="mt-2 text-3xl font-semibold">—</div>
+      </div>
+      <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 hover:bg-slate-900/70 transition">
+  <div class="flex items-center gap-1">
+    <div class="text-xs text-slate-400">TVL Usage</div>
+    <div class="group relative">
+      <span class="text-slate-500 text-xs cursor-help">ⓘ</span>
+      <div class="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-48 bg-slate-800 text-slate-300 text-xs rounded-lg px-3 py-2 hidden group-hover:block z-10 shadow-lg">
+        Protocol TVL as a percentage of the 200,000 USDC cap.
+      </div>
+    </div>
+  </div>
+  <div id="kpiUsage" class="mt-2 text-3xl font-semibold">—</div>
+</div>
+    </div>
+
+    <!-- KPI row 2 -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+      <div class="rounded-2xl border border-slate-800 bg-slate-900/40 p-6">
+        <div class="text-xs text-slate-400">My Balance</div>
+        <div id="kpiBalance" class="mt-2 text-3xl font-semibold">—</div>
+      </div>
+      <div class="rounded-2xl border border-slate-800 bg-slate-900/40 p-6">
+        <div class="text-xs text-slate-400">Claimable</div>
+        <div id="kpiDue" class="mt-2 text-3xl font-semibold text-emerald-400">—</div>
+        <div id="kpiDueHint" class="mt-2 text-xs text-slate-400"></div>
+      </div>
+    </div>
+
+    <!-- Main Claim -->
+        <!-- Claim -->
+    <button
+      id="btnClaim"
+      disabled
+      class="mt-6 w-full py-5 rounded-2xl font-semibold text-2xl bg-emerald-600 hover:bg-emerald-500 transition disabled:opacity-40 disabled:cursor-not-allowed"
+    >
+      Claim
+    </button>
+
+    <div class="mt-2 text-sm text-slate-500">
+      Claim is enabled only if your wallet is beneficiary of at least one vest with dueAmount &gt; 0.
+    </div>
+
+    <!-- Create Vest -->
+    <!-- Create Vest -->
+<div id="creatorPanel" class="mt-6 rounded-2xl border border-slate-800 bg-slate-900/40 p-6 space-y-5">
+  <div class="flex items-center justify-between gap-4">
+    <div class="text-xl font-semibold text-slate-100">Create Vest</div>
+    <div id="creatorHint" class="text-xs text-slate-400">
+      Permissionless: any wallet can create a vest.
+    </div>
+  </div>
+
+ <div class="text-sm leading-7">
+  <p class="text-slate-100 font-medium">
+    Lock funds on-chain. Recipient can claim their allowance each period.
+  </p>
+  <p class="text-slate-400 text-xs mt-1">
+    Total funding: monthly amount × 3 periods · Vest starts in ~5s · 
+    Termination available after Period 2 and before Period 3 completes.
+  </p>
+</div>
+
+  <!-- Monthly amount -->
+ <div>
+  <label class="block text-sm text-slate-300 mb-2">Monthly Amount (USDC)</label>
+  <input
+    id="ownerMonthly"
+    inputmode="decimal"
+    placeholder="e.g. 100"
+    class="w-full rounded-2xl bg-slate-950/40 border border-slate-800 px-5 py-4 text-slate-100 text-lg outline-none focus:border-emerald-500"
+  />
+  <div class="mt-1 text-xs text-slate-500">
+    Min 67 · Max 3,333 USDC &nbsp;·&nbsp; Total locked: min 200 / max 10,000 USDC
+  </div>
+  <div class="mt-2 text-sm text-slate-400">
+    Total principal (monthly × 3): <span id="ownerTotal" class="font-mono text-slate-200">—</span> USDC
+  </div>
+</div>
+  <!-- Approve -->
+  <button
+    id="btnOwnerApprove"
+    class="w-full px-5 py-5 rounded-2xl font-semibold text-2xl bg-amber-600 hover:bg-amber-500 transition disabled:opacity-40 disabled:cursor-not-allowed"
+    disabled
+  >
+    1) Approve USDC (monthly × 3)
+  </button>
+
+  <!-- Beneficiary -->
+  <div>
+  <label class="block text-sm text-slate-300 mb-2">Beneficiary Address</label>
+  <div class="flex gap-2">
+    <input
+      id="ownerBeneficiary"
+      type="text"
+      placeholder="0x..."
+      autocomplete="off"
+      autocapitalize="off"
+      spellcheck="false"
+      inputmode="text"
+      class="flex-1 rounded-2xl bg-slate-950/40 border border-slate-800 px-5 py-4 text-slate-100 text-lg font-mono outline-none focus:border-emerald-500"
+    />
+  </div>
+  <div class="mt-2 text-xs text-slate-400">
+    Tip: Tap and hold to paste in wallet browsers.
+</div>
+  <div class="mt-1 text-xs text-slate-500">
+    Enter the recipient's wallet address (e.g. MetaMask address)
+  </div>
+</div>
+  <!-- Create -->
+  <button
+    id="btnOwnerCreate"
+    class="w-full px-5 py-5 rounded-2xl font-semibold text-2xl bg-emerald-600 hover:bg-emerald-500 transition disabled:opacity-40 disabled:cursor-not-allowed"
+    disabled
+  >
+    2) Create Vest 
+  </button>
+   <div class="text-xs text-slate-400 mt-2">
+Vest will start in ~5 seconds
+</div>
+   <!-- View vest result -->
+   <div
+  id="viewVestBox"
+  class="hidden mt-4 rounded-xl border border-cyan-800/60 bg-cyan-950/10 px-5 py-4"
+>
+
+  <div class="text-cyan-400 font-medium">
+    Vest #<span id="viewVestId">—</span> created successfully
+  </div>
+
+  <div class="text-xs text-slate-400 mt-1">
+   Your vest will appear shortly in <b>Loading Vests</b> and <b>View Owner Vests</b>.
+  </div>
+
+</div>
+  <!-- Terminate -->
+  <div class="mt-6">
+  <div class="flex items-center justify-between mb-3">
+  <div class="text-lg font-medium text-slate-200">My Owner Vests</div>
+
+  <a
+    id="viewOwnerVestsLink"
+    href="#"
+    target="_blank"
+    class="text-sm text-cyan-400 hover:text-cyan-300"
+  >
+    View Owner Vests ↗
+  </a>
+</div>	  
+  <div class="ml-8 text-sm text-slate-400 mb-3">Terminate available after Month 2 and before Month 3 completes.</div>
+
+  <div id="ownerVestList" class="space-y-3">
+     <div class="rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-3">	  
+      Loading vests...
+    </div>
+  </div>
+</div>
+
+    <!-- Status -->
+    <div class="mt-6 rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
+      <div class="text-xs text-slate-400 mb-2">Status</div>
+      <div id="status" class="text-sm text-slate-200">Ready</div>
+    </div>
+
+    <!-- Log -->
+    <div class="hidden mt-6 rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
+      <div class="text-xs text-slate-400 mb-2">Log</div>
+      <pre id="logBox" class="h-44 overflow-y-auto text-xs whitespace-pre-wrap font-mono text-slate-200"></pre>
+    </div>
+<!-- libs -->
+<script defer src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+
+<!-- app modules (order matters) -->
+<script src="assets/js/config.js"></script>
+<script src="assets/js/abi.js"></script>
+<script src="assets/js/state.js"></script>
+<script src="assets/js/utils.js"></script>
+<script src="assets/js/ui.js"></script>
+<script src="assets/js/wallet.js"></script>
+<script src="assets/js/contracts.js"></script>
+<script src="assets/js/tx.js"></script>
+<script src="assets/js/flow.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+<div class="text-xs text-slate-500 text-center mt-10">
+Flowvest V1 · Public Beta · Base Sepolia
+</div>
+</html>

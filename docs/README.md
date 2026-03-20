@@ -6,26 +6,26 @@ Flowvest is a simple on-chain protocol for scheduled stablecoin payments.
 
 ## Start Here
 
-- 📄 Litepaper → ./litepaper.md
-- ⚙️ Protocol Rules → ./protocol-rules.md
-- 🏗 Architecture → ./architecture.md
+- 📄 Litepaper → ./01-litepaper.md
+- ⚙️ Protocol Rules → ./02-protocol-rules.md
+- 🏗 Architecture → ./03-architecture.md
 
 ---
 
 ## Core Design
 
-- 🧠 Design Principles → ./design-principles.md
-- 🔁 State Machine → ./state-machine.md
-- 🔐 Permission Model → ./permission-model.md
+- 🧠 Design Principles → ./07-design-principles.md
+- 🔁 State Machine → ./04-state-machine.md
+- 🔐 Permission Model → ./06-permission-model.md
 
 ---
 
 ## Risk & Safety
 
-- ⚠️ Risk Model → ./risk-model.md
+- ⚠️ Risk Model → ./05-risk-model.md
 
 ---
 
 ## Roadmap
 
-- 🚀 Roadmap → ./roadmap.md
+- 🚀 Roadmap → ./08-roadmap.md

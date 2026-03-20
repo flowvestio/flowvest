@@ -95,7 +95,7 @@ Explorer and indexing infrastructure are maintained separately.
 
 ## Documentation
 
-* [Protocol Design Principles](docs/protocol-design-principles.md)
+* [Protocol Design Principles](docs/07-design-principles.md)
 
 ---
 

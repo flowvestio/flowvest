@@ -20,11 +20,13 @@
 
   function safeError(err) {
     if (!err) return "Unknown error";
-    if (err?.data?.message) return err.data.message;
-    if (err?.error?.message) return err.error.message;
-    if (err?.reason) return err.reason;
-    if (err?.message) return err.message;
-    return String(err);
+    const ok = (v) => v && String(v) !== "null" && String(v) !== "undefined" && String(v) !== "[object Object]";
+    if (ok(err?.data?.message)) return String(err.data.message);
+    if (ok(err?.error?.message)) return String(err.error.message);
+    if (ok(err?.reason)) return String(err.reason);
+    if (ok(err?.message)) return String(err.message);
+    const s = String(err);
+    return ok(s) ? s : "Unknown error";
   }
 
   function txUrl(hash) {

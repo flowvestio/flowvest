@@ -4,27 +4,27 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-contract FlowvestV1Beta is ReentrancyGuard {
+contract FlowvestV1 is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     IERC20 public immutable token;
 
     uint256 public constant USDC_DECIMALS = 1e6;
 
-    // TEST: 60 seconds per "month"
-    uint256 public constant PERIOD = 60;
+    // Mainnet: fixed 30-day interval per period
+    uint256 public constant PERIOD = 30 days;
     uint256 public constant TOTAL_MONTHS = 3;
 
+    // Early Access limits
     uint256 public constant MIN_PRINCIPAL = 200 * USDC_DECIMALS;
-    uint256 public constant MAX_PRINCIPAL = 10_000 * USDC_DECIMALS;
-    uint256 public constant TVL_CAP = 200_000 * USDC_DECIMALS;
+    uint256 public constant MAX_PRINCIPAL = 3_000 * USDC_DECIMALS;
+    uint256 public constant TVL_CAP = 20_000 * USDC_DECIMALS;
 
-    // terminate must be after >= MIN_TERMINATE_PERIODS * PERIOD
+    // Termination allowed after >= 2 periods, but before full completion
     uint256 public constant MIN_TERMINATE_PERIODS = 2;
 
     // Current locked remaining principal across all active vests
     uint256 public totalPrincipal;
-
     uint256 public vestCount;
 
     struct Vest {
@@ -49,7 +49,6 @@ contract FlowvestV1Beta is ReentrancyGuard {
     );
 
     event Released(uint256 indexed id, address indexed caller, uint256 amount);
-
     event Terminated(uint256 indexed id, uint256 paidToBeneficiary, uint256 refundedToOwner);
 
     constructor(address token_) {
@@ -65,9 +64,12 @@ contract FlowvestV1Beta is ReentrancyGuard {
         uint256 monthlyAmount_
     ) external nonReentrant returns (uint256 id) {
         require(beneficiary_ != address(0), "ZERO_BENEFICIARY");
+        require(beneficiary_ != address(token), "BENEFICIARY_IS_TOKEN");
+        require(beneficiary_ != address(this), "BENEFICIARY_IS_CONTRACT");
         require(startAt_ >= block.timestamp, "START_IN_PAST");
         require(monthlyAmount_ > 0, "MONTHLY_ZERO");
         require(monthlyAmount_ <= MAX_PRINCIPAL / TOTAL_MONTHS, "MONTHLY_TOO_HIGH");
+
         uint256 principal = monthlyAmount_ * TOTAL_MONTHS;
 
         require(principal >= MIN_PRINCIPAL, "PRINCIPAL_TOO_SMALL");
@@ -86,10 +88,7 @@ contract FlowvestV1Beta is ReentrancyGuard {
             terminated: false
         });
 
-        // Pull funds first; if it reverts, state changes revert too
         token.safeTransferFrom(msg.sender, address(this), principal);
-
-        // TVL accounting: add locked principal after successful transfer
         totalPrincipal += principal;
 
         emit VestCreated(id, msg.sender, beneficiary_, startAt_, monthlyAmount_, principal);
@@ -99,15 +98,18 @@ contract FlowvestV1Beta is ReentrancyGuard {
 
     function dueMonths(uint256 id) public view returns (uint256) {
         Vest memory v = vests[id];
-        if (v.owner == address(0)) return 0;          // non-existent
-        if (v.terminated) return 0;                   // terminated: no more due
+        if (v.owner == address(0)) return 0;
+        if (v.terminated) return 0;
         if (block.timestamp < v.startAt) return 0;
 
         uint256 elapsed = block.timestamp - v.startAt;
-        uint256 months = elapsed / PERIOD;
+        uint256 monthsElapsed = elapsed / PERIOD;
 
-        if (months > TOTAL_MONTHS) months = TOTAL_MONTHS;
-        return months;
+        if (monthsElapsed > TOTAL_MONTHS) {
+            monthsElapsed = TOTAL_MONTHS;
+        }
+
+        return monthsElapsed;
     }
 
     function dueAmount(uint256 id) public view returns (uint256) {
@@ -121,20 +123,27 @@ contract FlowvestV1Beta is ReentrancyGuard {
         return vested - v.releasedAmount;
     }
 
+    function isCompleted(uint256 id) public view returns (bool) {
+        Vest memory v = vests[id];
+        if (v.owner == address(0)) return false;
+        if (v.terminated) return false;
+
+        return block.timestamp >= v.startAt + TOTAL_MONTHS * PERIOD;
+    }
+
     // ---------------- RELEASE ----------------
 
     function release(uint256 id) external nonReentrant {
         Vest storage v = vests[id];
         require(v.owner != address(0), "NO_VEST");
         require(!v.terminated, "TERMINATED");
+        require(block.timestamp >= v.startAt, "NOT_STARTED");
 
         uint256 amount = dueAmount(id);
-        require(block.timestamp >= v.startAt, "NOT_STARTED");
         require(amount > 0, "NOTHING_DUE");
 
         v.releasedAmount += amount;
 
-        // reduce locked TVL by released amount
         require(totalPrincipal >= amount, "TVL_UNDERFLOW");
         totalPrincipal -= amount;
 
@@ -142,57 +151,54 @@ contract FlowvestV1Beta is ReentrancyGuard {
 
         emit Released(id, msg.sender, amount);
     }
-// ---------------- TERMINATE ----------------
-// Rule:
-// - only owner can terminate
-// - must wait >= MIN_TERMINATE_PERIODS
-// - must be before vest fully completes
-// - pay due to beneficiary
-// - refund remaining to owner
 
-function terminate(uint256 id) external nonReentrant {
-    Vest storage v = vests[id];
+    // ---------------- TERMINATE ----------------
+    // Rule:
+    // - only owner can terminate
+    // - must wait >= MIN_TERMINATE_PERIODS * PERIOD
+    // - must be before vest fully completes
+    // - pay due to beneficiary
+    // - refund remaining to owner
 
-    require(v.owner != address(0), "NO_VEST");
-    require(msg.sender == v.owner, "NOT_OWNER");
-    require(!v.terminated, "TERMINATED");
+    function terminate(uint256 id) external nonReentrant {
+        Vest storage v = vests[id];
 
-    // must wait at least MIN_TERMINATE_PERIODS
-    require(
-        block.timestamp >= v.startAt + MIN_TERMINATE_PERIODS * PERIOD,
-        "LESS_THAN_MIN_PERIODS"
-    );
+        require(v.owner != address(0), "NO_VEST");
+        require(msg.sender == v.owner, "NOT_OWNER");
+        require(!v.terminated, "TERMINATED");
 
-    // terminate must happen before full completion
-    require(
-        block.timestamp < v.startAt + TOTAL_MONTHS * PERIOD,
-        "TERMINATE_WINDOW_CLOSED"
-    );
+        require(
+            block.timestamp >= v.startAt + MIN_TERMINATE_PERIODS * PERIOD,
+            "LESS_THAN_MIN_PERIODS"
+        );
 
-    // 1) pay any due to beneficiary
-    uint256 amountDue = dueAmount(id);
+        require(
+            block.timestamp < v.startAt + TOTAL_MONTHS * PERIOD,
+            "TERMINATE_WINDOW_CLOSED"
+        );
 
-    if (amountDue > 0) {
-        v.releasedAmount += amountDue;
+        uint256 amountDue = dueAmount(id);
 
-        require(totalPrincipal >= amountDue, "TVL_UNDERFLOW");
-        totalPrincipal -= amountDue;
+        if (amountDue > 0) {
+            v.releasedAmount += amountDue;
 
-        token.safeTransfer(v.beneficiary, amountDue);
+            require(totalPrincipal >= amountDue, "TVL_UNDERFLOW");
+            totalPrincipal -= amountDue;
+
+            token.safeTransfer(v.beneficiary, amountDue);
+        }
+
+        uint256 remaining = v.principal - v.releasedAmount;
+
+        v.terminated = true;
+
+        if (remaining > 0) {
+            require(totalPrincipal >= remaining, "TVL_UNDERFLOW");
+            totalPrincipal -= remaining;
+
+            token.safeTransfer(v.owner, remaining);
+        }
+
+        emit Terminated(id, amountDue, remaining);
     }
-
-    // 2) refund remaining to owner
-    uint256 remaining = v.principal - v.releasedAmount;
-
-    v.terminated = true;
-
-    if (remaining > 0) {
-        require(totalPrincipal >= remaining, "TVL_UNDERFLOW");
-        totalPrincipal -= remaining;
-
-        token.safeTransfer(v.owner, remaining);
-    }
-
-    emit Terminated(id, amountDue, remaining);
-}
 }

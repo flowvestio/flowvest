@@ -6,8 +6,8 @@ The format loosely follows Keep a Changelog and semantic versioning.
 
 ---
 
-## v1.0.0 — Public Beta
-Release date: 2026-03-17
+## v1.0.0 — Early Access 
+Release date: 2026-03-25
 
 ### Added
 - Initial Flowvest protocol deployment on Base Sepolia
@@ -16,7 +16,7 @@ Release date: 2026-03-17
 - Owner termination window logic
 - Flowvest explorer (scan.flowvest.io)
 - Address and vest tracking API
-- Public beta frontend (app.flowvest.io)
+- separated the entry points for Recipients and Senders
 
 ### Notes
 - This release is intended for testing.
@@ -31,6 +31,7 @@ Release date: 2026-03-17
 - Claim button state synchronization
 - Explorer indexing delay improvements
 - Minor UI rendering fixes
+- Add 14 days periods
 
 ### Improved
 - Wallet interaction flow

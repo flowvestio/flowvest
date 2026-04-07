@@ -1,0 +1,589 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Flowvest V1 – Sender</title>
+  <link rel="icon" type="image/png" href="/assets/logo/flowvest-logo.png" />
+
+  <!-- Tailwind (compiled, production build) -->
+  <link rel="stylesheet" href="assets/css/tailwind.min.css?v=20260320a">
+
+  <script>
+    (function () {
+      const KEY = "fv_theme";
+      const stored = (() => {
+        try {
+          return localStorage.getItem(KEY);
+        } catch (_) {
+          return null;
+        }
+      })();
+      const isDark = stored == null ? true : stored === "dark";
+      document.documentElement.classList.toggle("dark", isDark);
+    })();
+  </script>
+
+  <style>
+    :root {
+      --fv-bg: #ffffff;
+      --fv-text: #0a0a0a;
+      --fv-surface: #ffffff;
+      --fv-border: #e5e7eb;
+      --fv-muted: #6b7280;
+      --fv-tooltip: #ffffff;
+      --fv-menu: #ffffff;
+      --fv-input: #ffffff;
+    }
+    html.dark {
+      --fv-bg: #000000;
+      --fv-text: #fafafa;
+      --fv-surface: #000000;
+      --fv-border: #262626;
+      --fv-muted: #d4d4d4;
+      --fv-tooltip: #0a0a0a;
+      --fv-menu: #0a0a0a;
+      --fv-input: #0a0a0a;
+    }
+
+    body {
+      background-color: var(--fv-bg);
+      color: var(--fv-text);
+    }
+
+    .fv-surface {
+      background: var(--fv-surface) !important;
+      border-color: var(--fv-border) !important;
+    }
+    .fv-menu {
+      background: var(--fv-menu) !important;
+      border-color: var(--fv-border) !important;
+      color: var(--fv-text) !important;
+    }
+    .fv-tooltip {
+      background: var(--fv-tooltip) !important;
+      border-color: var(--fv-border) !important;
+      color: var(--fv-text) !important;
+    }
+    .fv-input {
+      background: var(--fv-input) !important;
+      border-color: var(--fv-border) !important;
+      color: var(--fv-text) !important;
+    }
+    .fv-muted {
+      color: var(--fv-muted) !important;
+    }
+    .fv-text {
+      color: var(--fv-text) !important;
+    }
+
+    .fv-modal-divider {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin: 1rem 0 0.75rem;
+    }
+    .fv-modal-divider::before,
+    .fv-modal-divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--fv-border);
+    }
+    .fv-modal-divider span {
+      flex-shrink: 0;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      color: var(--fv-muted);
+    }
+
+    .fv-qr-card {
+      background: var(--fv-surface);
+      border: 1px solid var(--fv-border);
+      color: var(--fv-text);
+    }
+
+    #status[data-type="success"] { color: #22c55e; }
+    #status[data-type="error"]   { color: #f87171; }
+    #status[data-type="info"]    { color: #22c55e; }
+
+    /* 桌面端（有精准鼠标指针）隐藏移动端专属提示 */
+    @media (pointer: fine) {
+      .mobile-only { display: none !important; }
+    }
+  </style>
+
+</head>
+
+<body>
+  <div class="max-w-3xl mx-auto px-4 py-6">
+
+    <!-- Header -->
+    <div class="flex items-start justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <img src="/assets/logo/flowvest-logo.png" class="h-10 w-10 rounded-2xl border border-slate-200 dark:border-slate-800" alt="Flowvest" />
+        <div>
+          <div class="text-xl font-extrabold tracking-tight flex items-center gap-2">
+            <span>Flowvest</span>
+            <span class="px-2 py-0.5 text-xs font-semibold rounded-md border border-emerald-500/40 bg-emerald-500/10 text-emerald-300">
+              V1
+            </span>
+          </div>
+          <div
+            id="metaChips"
+            class="mt-1.5 flex flex-col gap-0.5 text-sm leading-snug"
+          ></div>
+        </div>
+      </div>
+
+      <!-- Locale + Theme + Connect wallet -->
+      <div class="ml-auto flex items-start gap-1.5 sm:gap-3">
+        <div class="flex items-center gap-1.5">
+          <button
+            id="btnTheme"
+            type="button"
+            class="w-7 h-7 sm:w-12 sm:h-12 p-0 rounded-lg font-semibold border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/50 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-900 transition flex items-center justify-center"
+            data-i18n-aria="theme.aria"
+          >
+            <span class="inline-flex items-center justify-center w-3.5 h-3.5" aria-hidden="true"></span>
+          </button>
+          <button
+            id="btnLocaleToggle"
+            type="button"
+            class="w-7 h-7 sm:w-12 sm:h-12 p-0 rounded-lg font-semibold text-[10px] sm:text-xs border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/50 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-900 transition flex items-center justify-center"
+            data-i18n-aria="locale.label"
+          >
+            EN
+          </button>
+        </div>
+        <div class="relative w-fit">
+          <button
+            id="btnWallet"
+            type="button"
+            class="px-3 py-1.5 sm:px-5 sm:py-3 rounded-xl sm:rounded-2xl font-semibold text-sm sm:text-lg bg-emerald-600 hover:bg-emerald-500 transition shadow-lg disabled:opacity-40"
+          >
+            Connect Wallet
+          </button>
+          <div class="text-xs text-slate-400 mt-2 text-center md:hidden" data-i18n="wallet.mobileHint">
+            Recommended mobile wallets: MetaMask Wallet
+          </div>
+
+          <div
+            id="walletMenu"
+            class="fv-menu hidden absolute right-0 top-full mt-3 w-44 rounded-xl shadow-xl z-50"
+          >
+          <button
+            id="btnCopyAddress"
+            type="button"
+            class="block w-full text-left px-4 py-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-t-xl"
+            data-i18n="wallet.copy"
+          >
+            Copy Address
+          </button>
+
+          <button
+            id="btnViewExplorer"
+            type="button"
+            class="block w-full text-left px-4 py-2 hover:bg-slate-100 dark:hover:bg-white/10"
+            data-i18n="wallet.viewExplorer"
+          >
+            View Explorer
+          </button>
+
+          <button
+            id="btnDisconnect"
+            type="button"
+            class="block w-full text-left px-4 py-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-b-xl"
+            data-i18n="wallet.disconnect"
+          >
+            Disconnect
+          </button>
+        </div>
+      </div>
+      </div>
+    </div>
+
+    <!-- Wallet connect panel (disconnected only) -->
+    <div id="walletChooserOverlay" class="hidden fixed inset-0 z-50">
+      <div class="absolute inset-0 bg-black/30" data-wallet-chooser-close="1"></div>
+      <div class="relative max-w-md mx-auto mt-24 px-4">
+        <div class="fv-surface rounded-2xl border p-5 shadow-2xl font-sans max-h-[80vh] overflow-y-auto">
+          <div class="flex items-center justify-between gap-3">
+            <div class="text-lg font-semibold" data-i18n="wallet.chooserTitle">Connect Wallet</div>
+            <button
+              type="button"
+              class="px-3 py-2 rounded-xl fv-surface border text-lg leading-none"
+              data-i18n-aria="wallet.closeAria"
+              data-wallet-chooser-close="1"
+            >
+              ×
+            </button>
+          </div>
+          <p class="fv-muted text-sm mt-2" data-i18n="wallet.chooserSubtitle">
+            Choose a wallet or scan QR to connect
+          </p>
+
+          <div class="fv-modal-divider"><span data-i18n="wallet.browserWallet">Browser Wallet</span></div>
+          <div class="grid grid-cols-1 gap-4">
+            <div>
+              <button
+                id="btnConnectMetaMask"
+                type="button"
+                class="w-full fv-surface border rounded-xl px-4 py-3 text-left font-medium hover:opacity-90 transition"
+                data-i18n="wallet.metamask"
+                data-connect-injected="1"
+              >
+                <span class="flex items-center justify-between gap-3">
+                  <span>MetaMask</span>
+                  <span class="ml-2 text-xs px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400" data-i18n="wallet.recommendedBadge">Recommended</span>
+                </span>
+              </button>
+              <p class="fv-muted text-xs mt-1.5 pl-1" data-i18n="wallet.mmHint">
+                Browser extension wallet
+              </p>
+            </div>
+            <div>
+              <button
+                id="btnConnectOKX"
+                type="button"
+                class="w-full fv-surface border rounded-xl px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-300 hover:opacity-90 transition"
+                data-i18n="wallet.okx"
+                data-connect-injected="1"
+              >
+                OKX Wallet
+              </button>
+              <p class="fv-muted text-[11px] mt-1.5 pl-1" data-i18n="wallet.okxHint">
+                Recommended for mobile
+              </p>
+            </div>
+            <div>
+              <button
+                id="btnConnectOther"
+                type="button"
+                class="w-full fv-surface border rounded-xl px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-300 hover:opacity-90 transition"
+                data-i18n="wallet.other"
+                data-connect-injected="1"
+              >
+                Other Wallet
+              </button>
+              <p class="fv-muted text-[11px] mt-1.5 pl-1" data-i18n="wallet.otherHint">
+                Trust · Bitget · Base · Baby · and more
+              </p>
+            </div>
+          </div>
+
+          <div class="fv-modal-divider"><span data-i18n="wallet.scanQr">Scan with QR</span></div>
+          <div class="fv-surface border rounded-2xl p-4">
+            <div
+              id="wcQrPlaceholder"
+              class="fv-qr-card flex items-center justify-center min-h-44 rounded-xl font-mono text-sm tracking-widest"
+              data-i18n="wallet.qrPlaceholder"
+            >
+              QR CODE
+            </div>
+            <div id="wcQrBox" class="hidden flex items-center justify-center min-h-44"></div>
+            <div id="wcQrHint" class="fv-muted text-xs text-center mt-3" data-i18n="wallet.qrHintInitial">
+              Tap "Show QR" to generate a WalletConnect code.
+            </div>
+            <div class="mt-3 flex justify-center">
+              <button
+                id="btnShowWCQR"
+                type="button"
+                class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition"
+                data-i18n="wallet.showQr"
+              >
+                Show QR
+              </button>
+            </div>
+            <div id="wcQrActions" class="hidden mt-3 flex flex-wrap justify-center gap-2">
+              <button
+                id="btnOpenMetaMask"
+                type="button"
+                class="px-5 py-2.5 rounded-xl bg-emerald-600/10 hover:bg-emerald-600/15 border border-emerald-500/30 text-emerald-300 text-sm font-semibold transition"
+              >
+                Open MetaMask
+              </button>
+              <button
+                id="btnCopyWcLink"
+                type="button"
+                class="px-5 py-2.5 rounded-xl fv-surface border text-sm font-semibold hover:opacity-90 transition"
+              >
+                Copy Link
+              </button>
+            </div>
+          </div>
+          <p class="fv-muted text-xs mt-4 text-center" data-i18n="wallet.chooserTip">
+            Tip: Use QR if wallet connection fails
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Back link -->
+    <div class="mt-4">
+      <a href="/" class="text-sm fv-muted hover:text-emerald-400 transition">← Back</a>
+    </div>
+
+    <!-- MY BALANCE -->
+    <div class="fv-surface rounded-2xl border p-5 mt-4 flex items-center gap-2 text-sm">
+      <span class="fv-muted"><span data-i18n="kpi.myBalance">我的余额</span>：</span>
+      <span id="kpiBalance" class="font-semibold">—</span>
+      <span class="fv-muted">USDC</span>
+    </div>
+
+    <!-- FLOWVEST CONTRACT -->
+    <div class="fv-surface mt-4 rounded-2xl border p-5 text-sm">
+      <div class="fv-muted text-xs uppercase mb-2" data-i18n="contract.section">FLOWVEST CONTRACT</div>
+      <div id="flowAddr" class="font-mono text-xs mb-3" style="word-break:break-all">—</div>
+      <div class="text-xs mb-2">
+        <span data-i18n="contract.sourceVerifiedPre">Contract</span>
+        <span class="ml-1" data-i18n="contract.sourceVerifiedMid" style="color:#a855f7">Source Code</span>
+        <span class="ml-1" data-i18n="contract.sourceVerifiedPost">Verified</span>
+        <span class="mx-1">·</span>
+        <a href="https://basescan.org/address/0x1C3945D7588565daB4514Cbd7772fEe329E2A12d#code" target="_blank" class="text-cyan-400 hover:text-cyan-300 transition" style="white-space:nowrap" data-i18n="contract.viewOnBaseScan">View on BaseScan ↗</a>
+      </div>
+      <a id="scanBtn" href="https://scan.flowvest.io" target="_blank"
+        class="inline-flex w-fit text-sm text-cyan-400 hover:text-cyan-300 transition"
+        data-i18n="contract.scanLink">
+        View My Vests on Flowvest ↗
+      </a>
+    </div>
+
+    <!-- Early Access Gate -->
+<div id="earlyAccessGate" class="fv-surface mt-6 rounded-2xl border p-6 text-center space-y-4" style="display:none">
+  <div class="text-base font-semibold" data-i18n="early.title">Early Access</div>
+  <div class="text-sm fv-muted" data-i18n="early.desc">Enter your invite code to get started</div>
+  <input id="earlyAccessInput" type="text" autocomplete="off" spellcheck="false"
+    class="fv-input w-full max-w-xs mx-auto block rounded-xl border px-4 py-2 text-center text-sm outline-none focus:border-emerald-400"
+    data-i18n-placeholder="early.placeholder" placeholder="Enter invite code" />
+  <button id="earlyAccessBtn"
+    class="px-6 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white text-sm font-semibold"
+    data-i18n="early.submit">Submit</button>
+  <div id="earlyAccessError" class="text-sm text-red-400" style="display:none"></div>
+</div>
+
+    <!-- Create Vest -->
+<div id="creatorPanel" class="fv-surface mt-6 rounded-2xl border p-6 space-y-4" style="display:none">
+  <div class="pb-1 border-b border-white/10">
+    <div class="text-xs fv-muted mb-1">
+      <span data-i18n="creator.gettingStartedPre">New here? Read</span>
+      <a href="https://flowvest.io/getting-started.html" target="_blank" class="text-emerald-400 hover:text-emerald-300 ml-1" data-i18n="creator.gettingStartedLink">Getting Started</a>
+    </div>
+    <div class="text-xl font-semibold fv-text mb-3" data-i18n="creator.title">Create Vest</div>
+    <p class="fv-text font-medium text-sm" data-i18n="creator.intro">
+      Lock funds on-chain. Recipient can claim funds every 30 days.
+    </p>
+    <p class="fv-muted text-xs mt-1" data-i18n="creator.introNote">
+      Total funding: monthly amount × 3 periods · Vest starts in ~5s ·
+      Termination available after Period 2 and before Period 3 completes.
+    </p>
+  </div>
+
+  <!-- Step indicator -->
+  <div style="display:flex;align-items:center;gap:6px;margin-top:1rem;margin-bottom:1rem">
+    <span id="step1Dot" style="width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0"></span>
+    <span id="step1Label" style="font-size:14px;font-weight:600;white-space:nowrap">Approve USDC</span>
+    <span style="color:var(--fv-muted);font-size:18px;padding:0 32px;flex-shrink:0">→</span>
+    <span id="step2Dot" style="width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0"></span>
+    <span id="step2Label" style="font-size:14px;font-weight:600;white-space:nowrap">Create Vest</span>
+  </div>
+
+  <!-- Monthly amount -->
+ <div>
+  <label class="block text-sm fv-text mb-2" data-i18n="creator.monthlyLabel">Monthly Amount (USDC)</label>
+  <input
+    id="ownerMonthly"
+    inputmode="decimal"
+    data-i18n-placeholder="creator.monthlyPh"
+    placeholder="e.g. 100"
+    class="fv-input w-full rounded-2xl border px-5 py-4 text-lg outline-none focus:border-emerald-500"
+  />
+  <div class="mt-1 text-xs fv-muted" data-i18n="creator.monthlyRules">
+    Min 67 · Max 1,000 USDC &nbsp;·&nbsp; Total locked: min 200 / max 3,000 USDC
+  </div>
+  <div id="monthlyError" class="mt-1 text-xs text-rose-400 hidden"></div>
+  <div class="mt-2 text-sm fv-muted">
+    <span data-i18n="creator.totalPrincipalLabel">Total principal (monthly × 3):</span> <span id="ownerTotal" class="font-mono fv-text">—</span> USDC
+  </div>
+   <div id="balanceError" class="mt-1 text-xs text-rose-400 hidden"></div>
+
+</div>
+  <!-- Approve -->
+  <button
+    id="btnOwnerApprove"
+    class="w-full py-5 rounded-2xl font-semibold text-2xl bg-amber-600 hover:bg-amber-500 transition disabled:opacity-40 disabled:cursor-not-allowed" style="margin-top:0.5rem"
+    disabled
+    data-i18n="creator.approve"
+  >
+    1) Approve USDC (monthly × 3)
+  </button>
+
+  <!-- Beneficiary -->
+  <div style="margin-top:0.5rem">
+  <label class="block text-sm fv-text mb-2">
+    <span data-i18n="creator.beneficiaryLabel">Input Recipient Wallet Address</span>
+    <span class="text-emerald-400 ml-1" data-i18n="creator.beneficiaryLabelNote">(Please confirm the recipient's address)</span>
+  </label>
+  <div class="flex gap-2">
+    <input
+      id="ownerBeneficiary"
+      type="text"
+      data-i18n-placeholder="creator.beneficiaryPh"
+      placeholder="0x..."
+      autocomplete="off"
+      autocapitalize="off"
+      spellcheck="false"
+      inputmode="text"
+      class="fv-input flex-1 rounded-2xl border px-5 py-4 text-lg font-mono outline-none focus:border-emerald-500"
+    />
+  </div>
+  <div class="mt-2 text-xs fv-muted mobile-only" data-i18n="creator.beneficiaryTip">
+    Tip: Tap and hold to paste in wallet browsers.
+</div>
+  <div id="beneficiaryError" class="mt-1 text-xs text-rose-400 hidden"></div>
+</div>
+  <!-- Create -->
+  <button
+    id="btnOwnerCreate"
+    class="w-full py-5 rounded-2xl font-semibold text-2xl bg-emerald-600 hover:bg-emerald-500 transition disabled:opacity-40 disabled:cursor-not-allowed" style="margin-top:0.5rem"
+    disabled
+    data-i18n="creator.create"
+  >
+    2) Create Vest
+  </button>
+   <div class="text-xs fv-muted mt-2" data-i18n="creator.startSoon">
+Vest will start in ~5 seconds
+</div>
+   <div class="text-xs text-emerald-400 mt-1" data-i18n="creator.releaseInterval">
+Releases every 30 days (fixed interval)
+</div>
+
+
+    <!-- Status -->
+    <div class="fv-surface mt-4 rounded-2xl border p-4">
+      <div class="text-xs mb-2 text-green-500" data-i18n="status.label">Status:</div>
+      <div id="status" class="text-sm">—</div>
+    </div>
+
+  <!-- Terminate -->
+  <div class="mt-6">
+  <div class="flex items-center justify-between mb-3">
+  <div class="text-lg font-medium fv-text" data-i18n="creator.myOwnerVests">My Owner Vests</div>
+
+  <a
+    id="viewOwnerVestsLink"
+    href="#"
+    target="_blank"
+    class="text-sm text-cyan-400 hover:text-cyan-300"
+    data-i18n="creator.viewOwnerVests"
+  >
+    View Owner Vests ↗
+  </a>
+</div>
+  <div class="ml-8 text-sm fv-muted mb-3" data-i18n="creator.terminateWindow">Terminate available after Month 2 and before Month 3 completes.</div>
+
+  <div id="ownerVestList" class="space-y-3">
+     <div class="fv-surface rounded-xl border px-4 py-3" data-i18n="creator.loadingVests">
+      Loading vests...
+    </div>
+  </div>
+</div>
+
+    <!-- Log -->
+    <div class="fv-surface hidden mt-6 rounded-2xl border p-4">
+      <div class="fv-muted text-xs mb-2" data-i18n="status.log">Log</div>
+      <pre id="logBox" class="h-44 overflow-y-auto text-xs whitespace-pre-wrap font-mono"></pre>
+    </div>
+
+<!-- Social + Support -->
+<div class="flex items-center justify-center gap-4 mt-4 mb-4">
+  <a href="https://x.com/flowvestio" target="_blank" rel="noopener" class="fv-muted hover:text-white transition" aria-label="X (Twitter)">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.733-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+  </a>
+  <a href="https://github.com/flowvestio/flowvest" target="_blank" rel="noopener" class="fv-muted hover:text-white transition" aria-label="GitHub">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
+  </a>
+  <a href="https://t.me/+eHBjejs08rBiYTU1" target="_blank" rel="noopener noreferrer" class="fv-muted hover:text-white transition" aria-label="Telegram">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+  </a>
+</div>
+
+</div>
+
+<div class="text-xs text-slate-500 text-center" style="line-height:1.8">
+  <div>
+    <span data-i18n="support.needHelp">Need help? Contact:</span>
+    <a href="mailto:support@flowvest.io" class="text-cyan-500 hover:text-cyan-400 transition ml-1">support@flowvest.io</a>
+  </div>
+  <div>
+    <span data-i18n="support.security">Security issues?</span>
+    <a href="mailto:security@flowvest.io" class="text-cyan-500 hover:text-cyan-400 transition ml-1">security@flowvest.io</a>
+  </div>
+  <div class="mt-1 text-amber-500/80" data-i18n="support.neverAskKey">Flowvest will never ask for your private key.</div>
+</div>
+
+<div class="text-xs text-slate-500 text-center mt-4 mb-6" data-i18n="footer">
+  © 2026 Flowvest · Built on Base · USDC · Public Beta
+</div>
+
+
+<!-- libs -->
+<script defer src="assets/vendor/ethers.umd.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.23.8/dist/index.umd.js"></script>
+
+<!-- app modules (order matters) -->
+<script src="assets/js/i18n.js?v=20260325a"></script>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/abi.js"></script>
+<script src="assets/js/state.js"></script>
+<script src="assets/js/utils.js"></script>
+<script src="assets/js/ui.js?v=20260325a"></script>
+<script src="assets/js/wallet.js?v=20260325a"></script>
+<script src="assets/js/contracts.js"></script>
+<script src="assets/js/tx.js"></script>
+<script src="assets/js/flow.js?v=20260325a"></script>
+<script src="assets/js/early-access.js"></script>
+<script src="assets/js/app.js?v=20260325a"></script>
+
+<script>
+  (function () {
+    const KEY = "fv_theme";
+    const btn = document.getElementById("btnTheme");
+    if (!btn) return;
+
+    const setTheme = (theme) => {
+      const isDark = theme === "dark";
+      document.documentElement.classList.toggle("dark", isDark);
+      try {
+        localStorage.setItem(KEY, theme);
+      } catch (_) {}
+      if (window.I18N && typeof I18N.refreshThemeButton === "function") {
+        I18N.refreshThemeButton();
+      } else {
+        btn.textContent = isDark ? "Light" : "Dark";
+      }
+    };
+
+    const getTheme = () => {
+      try {
+        return localStorage.getItem(KEY);
+      } catch (_) {
+        return null;
+      }
+    };
+
+    const current = getTheme() || "dark";
+    setTheme(current);
+
+    btn.addEventListener("click", () => {
+      const next = document.documentElement.classList.contains("dark")
+        ? "light"
+        : "dark";
+      setTheme(next);
+    });
+  })();
+</script>
+</body>
+</html>

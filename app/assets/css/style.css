@@ -30,3 +30,7 @@
 #walletMenu button:hover {
   background: rgba(255,255,255,0.08);
 }
+
+#status[data-type="success"] { color: #22c55e; }
+#status[data-type="error"]   { color: #f87171; }
+#status[data-type="info"]    { color: #22c55e; }

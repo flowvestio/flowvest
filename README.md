@@ -103,14 +103,14 @@ Explorer and indexing infrastructure are maintained separately.
 
 Flowvest will evolve gradually as the protocol matures. Early releases prioritize reliability, transparency, and predictable on‑chain behavior.
 
-### V1 — Public Beta (Current Phase)
+### V1 — Public Beta
 
 * Base Sepolia deployment
 * USDC vesting schedules
 * Claim and terminate flows
 * Explorer + API support
 
-### V1 — Mainnet
+### V1 — Mainnet (Current Phase)
 
 * Base mainnet deployment
 * USDC support

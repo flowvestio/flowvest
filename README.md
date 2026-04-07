@@ -12,7 +12,7 @@ Flowvest is a lightweight protocol that allows users to schedule stablecoin paym
 
 ## Status
 
-Flowvest V1 is currently in **Public Beta** on **Base Sepolia**.
+Flowvest V1 is currently in Base Mainnet.
 
 Please use small USDC test amounts and review transactions carefully.
 
@@ -22,8 +22,8 @@ Please use small USDC test amounts and review transactions carefully.
 
 * **App:** [https://app.flowvest.io](https://app.flowvest.io)
 * **Explorer:** [https://scan.flowvest.io](https://scan.flowvest.io)
-* **Network:** Base Sepolia
-* **Asset:** Test USDC
+* **Network:** Base Mainnet
+* **Asset:** USDC
 
 ---
 
@@ -53,17 +53,17 @@ All vest schedules are transparent and verifiable on-chain.
 
 ---
 
-## V1 Parameters
+## V1 Early Access
 
-Current Public Beta configuration:
+Current configuration:
 
 * **Token:** USDC
-* **Network:** Base Sepolia
+* **Network:** Base Mainnet
 * **Periods:** 3
-* **Period Length:** 60 seconds (test month)
-* **Min Principal:** 200 USDC
-* **Max Principal:** 10,000 USDC
-* **Protocol TVL Cap:** 200,000 USDC
+* **Period Length:** 30 days
+* * **Min Principal:** 200 USDC
+* **Max Principal:** 3,000 USDC
+* **Protocol TVL Cap:** 20,000 USDC
 
 ---
 

@@ -61,7 +61,7 @@ Current configuration:
 * **Network:** Base Mainnet
 * **Periods:** 3
 * **Period Length:** 30 days
-* * **Min Principal:** 200 USDC
+* **Min Principal:** 200 USDC
 * **Max Principal:** 3,000 USDC
 * **Protocol TVL Cap:** 20,000 USDC
 

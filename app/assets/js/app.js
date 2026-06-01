@@ -5,8 +5,9 @@
   let refreshRunning = false;
   let appInitialized = false;
   const OWNER_VEST_PAGE_SIZE = 5;
-  // tracks the monthly value for which USDC was approved this session
-  let approvedForMonthly = null;
+  // tracks the monthly value + plan for which USDC was approved this session
+  let approvedForMonthly = null; // { value: string, plan: number } | null
+  let selectedPlan = C.PLAN_A;
 
   function formatTvlCapShort(n) {
     const x = Number(n);
@@ -19,6 +20,23 @@
     return String(x);
   }
 
+  function formatInterval(secs) {
+    const n = Number(secs);
+    if (n < 3600) return n + 's';
+    return Math.round(n / 86400) + 'd';
+  }
+
+  /** Sender total principal display: always 2 decimals, no thousands grouping (e.g. 4665.00). */
+  function formatPrincipalUiAmount(n) {
+    const x = Number(n);
+    if (!Number.isFinite(x)) return "—";
+    return x.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+      useGrouping: false,
+    });
+  }
+
   function refreshMetaChips() {
     try {
       const cap = Number(C.TVL_CAP_USDC || 0) || 0;
@@ -27,11 +45,17 @@
       while (metaChips.firstChild) metaChips.removeChild(metaChips.firstChild);
 
       const line1 = document.createElement("div");
-      line1.textContent = I18N.t("meta.line1", {
+      const line1Text = I18N.t("meta.line1", {
         chain: C.CHAIN_NAME,
-        total: C.TOTAL,
-        period: Math.round(C.PERIOD / 86400)
+        periodsA: C.PERIODS_A,
+        intervalA: formatInterval(C.PERIOD_A),
+        periodsB: C.PERIODS_B,
+        intervalB: formatInterval(C.PERIOD_B),
       });
+      line1.innerHTML = line1Text.replace(
+        "V1.1",
+        '<span style="color:#34d399;font-weight:700">V1.1</span>'
+      );
       metaChips.appendChild(line1);
 
       if (cap > 0) {
@@ -68,6 +92,7 @@
     refreshMetaChips();
     updateKpiTvlTooltip();
     syncButtonOriginalsFromI18n();
+    if (window.UI?.refreshStatusI18n) UI.refreshStatusI18n();
     await renderOwnerVestList(ownerVestPage);
     if (STATE.account && Number(STATE.chainId) === Number(C.CHAIN_ID) && STATE.flow) {
       await FLOW.refreshView();
@@ -82,6 +107,22 @@
     updateCreatorFormState();
   }
 
+  function applyScanStatsTvlHint(data) {
+    const tvl = Number(data?.tvl || 0);
+    STATE.protocolTvlNum = Number.isFinite(tvl) ? tvl : null;
+    try {
+      updateCreatorFormState();
+    } catch (_) {}
+  }
+
+  async function refreshProtocolTvlFromScanApi() {
+    try {
+      const res = await fetch(`${C.API_STATS}?t=${Date.now()}`);
+      if (!res.ok) return;
+      applyScanStatsTvlHint(await res.json());
+    } catch (_) {}
+  }
+
   // Fetch protocol stats from scan API immediately at page load — no wallet needed.
   // DB query < 50ms vs chain RPC ~1-2s, so TVL appears almost instantly.
   async function prefetchPublicStats() {
@@ -89,7 +130,12 @@
       const res = await fetch(`${C.API_STATS}?t=${Date.now()}`);
       if (!res.ok) throw new Error("stats api failed");
       const data = await res.json();
-      if (STATE.flow) return; // wallet already initialized — refreshStats() will handle it
+      // Always keep scan TVL for sender TVL-cap hint — even if `STATE.flow` is already set.
+      // OKX / mobile often finishes wallet init before this fetch returns; an early `return`
+      // used to skip this and left `protocolTvlNum` null → no TVL warning on device.
+      applyScanStatsTvlHint(data);
+
+      if (STATE.flow) return; // wallet already initialized — refreshStats() owns KPI widgets
       const tvl = Number(data.tvl || 0);
       const cap = Number(C.TVL_CAP_USDC || 0) || 0;
       const usage = cap > 0 ? (tvl / cap) * 100 : null;
@@ -102,14 +148,32 @@
   async function refreshStats() {
     try {
       if (!STATE.flow) return;
+      if (STATE.rpcBackoffUntil && Date.now() < STATE.rpcBackoffUntil) return;
 
       const stats = await FLOW.loadStats();
       UI.updateStatsUI(stats);
-       if (stats.balance) {
-      STATE.balanceNum = Number(ethers.utils.formatUnits(stats.balance, C.DECIMALS_USDC));
-    }	    
+      if (stats.tvl != null) {
+        try {
+          STATE.protocolTvlNum = Number(
+            ethers.utils.formatUnits(stats.tvl, C.DECIMALS_USDC)
+          );
+        } catch (_) {
+          STATE.protocolTvlNum = null;
+        }
+      }
+      if (stats.balance != null) {
+        STATE.balanceNum = Number(
+          ethers.utils.formatUnits(stats.balance, C.DECIMALS_USDC)
+        );
+      }
+      try {
+        updateCreatorFormState();
+      } catch (_) {}
     } catch (err) {
       console.error("[APP] refreshStats error:", err);
+      if (err?.status === 429 || err?.response?.status === 429 || String(err?.message || "").includes("429")) {
+        STATE.rpcBackoffUntil = Date.now() + 30000;
+      }
     }
   }
 
@@ -118,6 +182,7 @@
     if (!STATE.account) return;
     if (STATE.isBusy) return;
     if (STATE.isClaiming) return;
+    if (STATE.rpcBackoffUntil && Date.now() < STATE.rpcBackoffUntil) return;
     if (refreshRunning) return;
     refreshRunning = true;
     try {
@@ -129,9 +194,76 @@
     }
   }
 
+  /** OKX / mobile in-app: balance + contracts can lag first paint; re-pull shortly after connect/init. */
+  function scheduleDeferredRunRefresh() {
+    const kick = async () => {
+      if (STATE.rpcBackoffUntil && Date.now() < STATE.rpcBackoffUntil) return;
+      if (!STATE.account || Number(STATE.chainId) !== Number(C.CHAIN_ID)) {
+        return;
+      }
+      if (STATE.isBusy || STATE.isClaiming) return;
+      if (!STATE.flow) {
+        await tryInitContracts(2);
+        if (!STATE.flow) return;
+      }
+      await runRefresh();
+      try {
+        updateCreatorFormState();
+      } catch (_) {}
+    };
+    setTimeout(() => void kick(), 2500);
+  }
+
+  /** When user returns to the tab / app: re-init contracts if first pass missed (refreshStats needs STATE.flow). */
+  async function resyncWalletUiAfterReveal() {
+    if (!appInitialized || STATE.isBusy) return;
+    try {
+      if (!STATE.account || Number(STATE.chainId) !== Number(C.CHAIN_ID)) {
+        await renderOwnerVestList(ownerVestPage);
+        return;
+      }
+      if (!STATE.flow) {
+        await tryInitContracts(2);
+        if (!STATE.flow) return;
+      }
+      await refreshStats();
+      try {
+        await FLOW.refreshView();
+      } catch (_) {}
+      await renderOwnerVestList(ownerVestPage);
+      try {
+        updateCreatorFormState();
+      } catch (_) {}
+    } catch (_) {}
+  }
+
+  async function tryInitContracts(maxAttempts = 3) {
+    let lastErr = null;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      if (STATE.rpcBackoffUntil && Date.now() < STATE.rpcBackoffUntil) {
+        return lastErr || new Error("RPC rate limited");
+      }
+      try {
+        await CONTRACTS.init(STATE);
+        return null;
+      } catch (e) {
+        lastErr = e;
+        console.warn("[APP] CONTRACTS.init attempt", attempt, e);
+        if (e?.status === 429 || e?.response?.status === 429 || String(e?.message || "").includes("429") || String(e?.message || "").includes("Too Many Requests")) {
+          STATE.rpcBackoffUntil = Date.now() + 30000;
+          break;
+        }
+        if (attempt < maxAttempts) {
+          await new Promise((r) => setTimeout(r, 450));
+        }
+      }
+    }
+    return lastErr;
+  }
+
   function startAutoRefresh() {
   if (statsTimer) clearInterval(statsTimer);
-  statsTimer = setInterval(runRefresh, 5000);
+  statsTimer = setInterval(runRefresh, 30000);
 }
 
   async function connectInjectedWallet() {
@@ -154,10 +286,11 @@
       }
 
       await runRefresh();
+      scheduleDeferredRunRefresh();
 
       updateCreatorFormState();
       updateOwnerVestLink();
-      UI.showInfo(I18N.t("status.ready"));
+      UI.showStatusKey("status.ready", "info");
     } catch (e) {
       console.error("[APP] connectWallet error:", e);
       UI.showError(e.message || String(e));
@@ -182,10 +315,11 @@
       UI.setConnected();
 
       await runRefresh();
+      scheduleDeferredRunRefresh();
 
       updateCreatorFormState();
       updateOwnerVestLink();
-      UI.showInfo(I18N.t("status.ready"));
+      UI.showStatusKey("status.ready", "info");
     } catch (e) {
       console.error("[APP] connectWalletConnect error:", e);
       UI.showError(e.message || String(e));
@@ -225,7 +359,7 @@ async function loadAddressSummary() {
   if (!STATE.account) return null;
 
   const r = await fetch(
-    `https://scan.flowvest.io/api/address/${STATE.account}/summary?t=${Date.now()}`
+    `${C.SCAN_BASE}/api/address/${STATE.account}/summary?t=${Date.now()}`
   );
 
   if (!r.ok) {
@@ -248,6 +382,7 @@ async function loadAddressSummary() {
     const btnShowQR = document.getElementById("btnShowWCQR");
     const qrActions = document.getElementById("wcQrActions");
     const btnOpenMM = document.getElementById("btnOpenMetaMask");
+    const btnOpenOKX = document.getElementById("btnOpenOKX");
     const btnCopyLink = document.getElementById("btnCopyWcLink");
     const qrBox = document.getElementById("wcQrBox");
     const qrHint = document.getElementById("wcQrHint");
@@ -330,13 +465,24 @@ async function loadAddressSummary() {
       if (!uri) return;
       if (qrPlaceholder) qrPlaceholder.classList.add("hidden");
       qrBox.classList.remove("hidden");
+      // Ensure high contrast for mobile scanners (OKX in particular):
+      // force white background and some quiet-zone padding.
+      try {
+        qrBox.style.background = "#ffffff";
+        qrBox.style.borderRadius = "16px";
+        qrBox.style.padding = "12px";
+        qrBox.style.width = "fit-content";
+        qrBox.style.margin = "0 auto";
+      } catch (_) {}
       try {
         // eslint-disable-next-line no-undef
         new QRCode(qrBox, {
           text: uri,
-          width: 220,
-          height: 220,
-          correctLevel: QRCode.CorrectLevel.M
+          width: 320,
+          height: 320,
+          colorDark: "#000000",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.H
         });
       } catch (err) {
         console.warn("[APP] QR render failed", err);
@@ -349,10 +495,21 @@ async function loadAddressSummary() {
         btnShowQR.dataset.qrShown = "1";
       }
       if (qrActions) qrActions.classList.remove("hidden");
+
+      // Show raw WalletConnect URI for manual open/copy fallback.
+      try {
+        const uriWrap = document.getElementById("wcUriWrap");
+        const uriInput = document.getElementById("wcUriInput");
+        const uriOpen = document.getElementById("wcUriOpenLink");
+        if (uriInput) uriInput.value = uri;
+        if (uriOpen) uriOpen.href = uri;
+        if (uriWrap) uriWrap.classList.remove("hidden");
+      } catch (_) {}
     };
 
     const syncQrActionLabels = () => {
       if (btnOpenMM) btnOpenMM.textContent = I18N.t("wallet.openMetaMask");
+      if (btnOpenOKX) btnOpenOKX.textContent = (I18N.t("wallet.openOkx") || "Open OKX");
       if (btnCopyLink) btnCopyLink.textContent = I18N.t("wallet.copyLink");
     };
     syncQrActionLabels();
@@ -368,17 +525,63 @@ async function loadAddressSummary() {
       });
     }
 
+    if (btnOpenOKX) {
+      btnOpenOKX.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const uri = window.WALLET?.getWalletConnectUri ? WALLET.getWalletConnectUri() : "";
+        const link = window.WALLET?.okxDeepLink ? WALLET.okxDeepLink(uri) : "";
+        UI.showInfo(I18N.t("wallet.openingOkx") || "Opening OKX…");
+        if (link) window.location.href = link;
+      });
+    }
+
     if (btnCopyLink) {
       btnCopyLink.addEventListener("click", async (e) => {
         e.preventDefault();
         e.stopPropagation();
         const uri = window.WALLET?.getWalletConnectUri ? WALLET.getWalletConnectUri() : "";
         if (!uri) return;
+        const prevText = btnCopyLink.textContent;
         try {
-          await navigator.clipboard.writeText(uri);
-          UI.showSuccess(I18N.t("wallet.linkCopied"));
-        } catch (_) {
-          UI.showError(I18N.t("wallet.linkCopyFailed"));
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(uri);
+          } else {
+            const ta = document.createElement("textarea");
+            ta.value = uri;
+            ta.style.position = "fixed";
+            ta.style.left = "-9999px";
+            ta.style.top = "0";
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            const ok = document.execCommand("copy");
+            document.body.removeChild(ta);
+            if (!ok) throw new Error("copy_failed");
+          }
+          // Visual feedback in modal (mobile wallets often hide global toasts).
+          try {
+            btnCopyLink.textContent = I18N.t("wallet.linkCopied") || "Copied";
+            btnCopyLink.disabled = true;
+            setTimeout(() => {
+              btnCopyLink.textContent = prevText;
+              btnCopyLink.disabled = false;
+            }, 1200);
+          } catch (_) {}
+          UI.showSuccess(I18N.t("wallet.linkCopied") || "Copied.");
+        } catch (err) {
+          // Fallback: reveal URI input for manual copy
+          try {
+            const uriWrap = document.getElementById("wcUriWrap");
+            const uriInput = document.getElementById("wcUriInput");
+            if (uriInput) uriInput.value = uri;
+            if (uriWrap) uriWrap.classList.remove("hidden");
+            if (uriInput) {
+              uriInput.focus();
+              uriInput.select();
+            }
+          } catch (_) {}
+          UI.showError(I18N.t("wallet.linkCopyFailed") || "Copy failed. Please copy the wc: link manually.");
         }
       });
     }
@@ -434,9 +637,10 @@ async function loadAddressSummary() {
         try {
           await navigator.clipboard.writeText(STATE.account);
           UI.showSuccess(I18N.t("wallet.copied"));
-          UI.closeWalletMenu();
         } catch (err) {
           UI.showError(I18N.t("wallet.copyFailed"));
+        } finally {
+          UI.closeWalletMenu();
         }
       });
     }
@@ -494,7 +698,7 @@ async function loadAddressSummary() {
   if (!link) return;
 
   if (STATE.account) {
-    link.href = `https://scan.flowvest.io/viewowner.html?addr=${STATE.account}`;
+    link.href = `${C.SCAN_BASE}/viewsender.html?addr=${STATE.account}`;
     link.style.pointerEvents = "auto";
     link.style.opacity = "1";
   } else {
@@ -540,12 +744,16 @@ async function loadAddressSummary() {
   }
 
   function updateCreatorFormState() {
-    // Don't overwrite pending button labels while a tx is in progress.
-    if (STATE.isBusy) return;
+    // While a tx is in progress, avoid resetting button *labels* ("Claiming…") but
+    // still refresh disabled state so WalletConnect / reconnect flows don't leave
+    // Approve stuck disabled from the initial HTML `disabled` attribute.
+    const deferButtonLabels = STATE.isBusy;
 
     const ownerMonthly = document.getElementById("ownerMonthly");
     const ownerTotal = document.getElementById("ownerTotal");
+    const ownerTotalLabel = document.getElementById("ownerTotalLabel");
     const ownerBeneficiary = document.getElementById("ownerBeneficiary");
+    const monthlyRulesEl = document.getElementById("monthlyRulesHint");
 
     const btnApprove = document.getElementById("btnOwnerApprove");
     const btnCreate = document.getElementById("btnOwnerCreate");
@@ -554,13 +762,41 @@ async function loadAddressSummary() {
     const beneficiary = ownerBeneficiary?.value?.trim() || "";
 
     const monthlyNum = Number(monthly);
-    const total = monthlyNum * 3;
+
+    // Plan-aware periods and per-month limits
+    const periods = selectedPlan === C.PLAN_B ? C.PERIODS_B : C.PERIODS_A;
+    const maxPrincipalUi = Number(C.MAX_PRINCIPAL_USDC || 0) || 3000;
+    const minMonthly = Math.ceil(200 / periods);
+    const maxMonthly = Math.floor(maxPrincipalUi / periods);
+    const total = monthlyNum * periods;
+
+    const isPlanB = selectedPlan === C.PLAN_B;
+    const releaseIntervalEl = document.getElementById("releaseIntervalHint");
+    if (releaseIntervalEl) {
+      releaseIntervalEl.textContent = I18N.t(isPlanB ? "creator.releaseIntervalB" : "creator.releaseInterval");
+    }
+    if (ownerTotalLabel) {
+      ownerTotalLabel.textContent = I18N.t(
+        isPlanB ? "creator.totalPrincipalLabelB" : "creator.totalPrincipalLabel",
+        { periods }
+      );
+    }
+    const monthlyLabelEl = document.querySelector("label[data-i18n='creator.monthlyLabel']");
+    if (monthlyLabelEl) {
+      monthlyLabelEl.textContent = I18N.t(isPlanB ? "creator.biweeklyLabel" : "creator.monthlyLabel");
+    }
+    if (monthlyRulesEl) {
+      monthlyRulesEl.textContent = I18N.t(
+        isPlanB ? "creator.biweeklyRules" : "creator.monthlyRules",
+        { min: minMonthly, max: maxMonthly.toLocaleString() }
+      );
+    }
 
     const monthlyValid =
       Number.isFinite(monthlyNum) &&
       total >= 200 &&
-      total <= 3000;
-    
+      total <= maxPrincipalUi;
+
     const required = total;
 
 const balanceError = document.getElementById("balanceError");
@@ -583,24 +819,24 @@ if (balanceError) {
     ownerTotal.textContent = "—";
     ownerTotal.className = "font-mono fv-text";
   } else if (total < 200) {
-    ownerTotal.textContent = I18N.t("form.minTotal", { total: total.toFixed(2) });
+    ownerTotal.textContent = I18N.t("form.minTotal", { total: formatPrincipalUiAmount(total) });
     ownerTotal.className = "font-mono text-rose-400"; // 红色
-  } else if (total > 3000) {
-    ownerTotal.textContent = I18N.t("form.maxTotal", { total: total.toFixed(2) });
+  } else if (total > maxPrincipalUi) {
+    ownerTotal.textContent = I18N.t("form.maxTotal", { total: formatPrincipalUiAmount(total) });
     ownerTotal.className = "font-mono text-rose-400"; // 红色
   } else {
-    ownerTotal.textContent = total.toFixed(2);
+    ownerTotal.textContent = formatPrincipalUiAmount(total);
     ownerTotal.className = "font-mono text-emerald-400"; // 绿色
   }
 }
-    
+
     const errorEl = document.getElementById("monthlyError");
 if (errorEl) {
   if (monthlyNum > 0 && total < 200) {
-    errorEl.textContent = I18N.t("form.minMonthly");
+    errorEl.textContent = I18N.t("form.minMonthly", { min: minMonthly });
     errorEl.classList.remove("hidden");
-  } else if (total > 3000) {
-    errorEl.textContent = I18N.t("form.maxMonthly");
+  } else if (total > maxPrincipalUi) {
+    errorEl.textContent = I18N.t("form.maxMonthly", { max: maxMonthly.toLocaleString() });
     errorEl.classList.remove("hidden");
   } else {
     errorEl.classList.add("hidden");
@@ -608,8 +844,61 @@ if (errorEl) {
 }
     const balanceInsufficient = monthlyValid && STATE.balanceNum > 0 && total > STATE.balanceNum;
 
+    const capTvl = Number(C.TVL_CAP_USDC || 0) || 0;
+    const tvlNow = STATE.protocolTvlNum;
+    const hasProtocolTvl =
+      capTvl > 0 &&
+      tvlNow != null &&
+      Number.isFinite(Number(tvlNow)) &&
+      Number(tvlNow) >= 0;
+    const remainingTvl = hasProtocolTvl ? Math.max(0, capTvl - Number(tvlNow)) : null;
+    const tvlWouldExceed =
+      !!(monthlyValid && remainingTvl != null && total > remainingTvl + 1e-6);
+
+    const tvlCapHintEl = document.getElementById("tvlCapHint");
+    if (tvlCapHintEl) {
+      if (tvlWouldExceed) {
+        tvlCapHintEl.textContent = I18N.t("form.tvlWouldExceed", {
+          total: total.toFixed(2),
+          remaining: remainingTvl.toFixed(2),
+          cap: capTvl.toLocaleString(),
+          periods: String(periods),
+        });
+        tvlCapHintEl.classList.remove("hidden");
+      } else {
+        tvlCapHintEl.textContent = "";
+        tvlCapHintEl.classList.add("hidden");
+      }
+    }
+
     if (btnApprove) {
-      btnApprove.disabled = !monthlyValid || !STATE.account || !onRightChain || balanceInsufficient;
+      btnApprove.disabled =
+        !monthlyValid ||
+        !STATE.account ||
+        !onRightChain ||
+        balanceInsufficient ||
+        tvlWouldExceed;
+      if (btnApprove.disabled && STATE.account && monthlyValid) {
+        if (!onRightChain) {
+          btnApprove.title = I18N.t("errors.switchChain", { chain: C.CHAIN_NAME });
+        } else if (balanceInsufficient) {
+          btnApprove.title = I18N.t("form.insufficientBalance", {
+            required: required.toFixed(2),
+            available: Number(STATE.balanceNum || 0).toFixed(2),
+          });
+        } else if (tvlWouldExceed) {
+          btnApprove.title = I18N.t("form.tvlWouldExceed", {
+            total: total.toFixed(2),
+            remaining: remainingTvl.toFixed(2),
+            cap: capTvl.toLocaleString(),
+            periods: String(periods),
+          });
+        } else {
+          btnApprove.title = "";
+        }
+      } else {
+        btnApprove.title = "";
+      }
     }
     
     const beneficiaryError = document.getElementById("beneficiaryError");
@@ -621,7 +910,9 @@ if (beneficiaryError) {
     beneficiaryError.classList.add("hidden");
   }
 }
-    const isApproved = approvedForMonthly !== null && approvedForMonthly === monthly;
+    const isApproved = approvedForMonthly !== null &&
+      approvedForMonthly.value === monthly &&
+      approvedForMonthly.plan === selectedPlan;
     if (btnCreate) {
       btnCreate.disabled =
         !monthlyValid ||
@@ -629,19 +920,22 @@ if (beneficiaryError) {
         !STATE.account ||
         !onRightChain ||
         balanceInsufficient ||
+        tvlWouldExceed ||
         !isApproved;
     }
 
     // Deterministically restore button labels (disable state is controlled above).
-    if (btnApprove && btnApprove.dataset.originalText) {
-      btnApprove.textContent = btnApprove.dataset.originalText;
-    }
-    if (btnCreate && btnCreate.dataset.originalText) {
-      btnCreate.textContent = btnCreate.dataset.originalText;
+    if (!deferButtonLabels) {
+      if (btnApprove && btnApprove.dataset.originalText) {
+        btnApprove.textContent = btnApprove.dataset.originalText;
+      }
+      if (btnCreate && btnCreate.dataset.originalText) {
+        btnCreate.textContent = btnCreate.dataset.originalText;
+      }
     }
 
     // Step indicator
-    if (!STATE.account || !onRightChain || !monthlyValid) {
+    if (!STATE.account || !onRightChain || !monthlyValid || tvlWouldExceed) {
       updateStepIndicator(0);
     } else if (isApproved) {
       updateStepIndicator(2);
@@ -674,7 +968,7 @@ if (beneficiaryError) {
   }
 
     const url =
-      `https://scan.flowvest.io/api/owner-vests` +
+      `${C.SCAN_BASE}/api/owner-vests` +
       `?owner=${STATE.account}` +
       `&page=${page}` +
       `&limit=${OWNER_VEST_PAGE_SIZE}` +
@@ -751,7 +1045,7 @@ if (beneficiaryError) {
       rows.forEach((v) => {
         const vestId = v.vest_id ?? v.id;
         const beneficiary = v.beneficiary || "";
-        const monthly = Number(v.monthly || 0);
+        const monthly = Number(v.periodAmount ?? v.monthly ?? 0);
 
         let actionHtml = "";
 
@@ -802,12 +1096,14 @@ if (beneficiaryError) {
           `;
         }
 
+        const canShare = v.status === "active" || v.status === "pending";
+
         box.innerHTML += `
           <div class="fv-surface flex items-center justify-between gap-4 rounded-2xl border px-4 py-3">
             <div>
 	       <div class="font-medium">
   <a
-    href="https://scan.flowvest.io/vest.html?id=${vestId}"
+    href="${C.SCAN_BASE}/vest.html?id=${vestId}"
     target="_blank"
     class="hover:text-cyan-500 underline"
   >
@@ -816,11 +1112,30 @@ if (beneficiaryError) {
 </div>
               <div class="text-xs fv-muted mt-1 space-y-0.5">
                 <div>${I18N.t("owner.beneficiaryLabel")} <span class="font-mono">${shortAddr(beneficiary)}</span></div>
+                ${v.memo ? `<div>Label: <span class="font-mono">${UI.escapeHtml(v.memo)}</span></div>` : ""}
                 <div>${I18N.t("owner.monthlyLabel")} <span class="font-mono">${monthly.toFixed(1)} USDC</span></div>
               </div>
             </div>
-            <div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
               ${actionHtml}
+              ${
+                canShare
+                  ? `<button
+                      onclick="(function(btn){
+                        var url='${C.SCAN_BASE}/vest.html?id=${vestId}';
+                        navigator.clipboard.writeText(url).then(function(){
+                          var orig=btn.textContent;
+                          btn.textContent='✅ Link copied!';
+                          setTimeout(function(){btn.textContent=orig;},1500);
+                        }).catch(function(){
+                          btn.textContent='Failed';
+                          setTimeout(function(){btn.textContent='Share';},1500);
+                        });
+                      })(this)"
+                      style="font-size:0.75rem;padding:3px 10px;border-radius:8px;border:1px solid var(--fv-border);background:transparent;color:var(--fv-muted);cursor:pointer;margin-right:18px;"
+                    >Share</button>`
+                  : ``
+              }
             </div>
           </div>
         `;
@@ -929,6 +1244,30 @@ if (beneficiaryError) {
       ownerBeneficiary.addEventListener("input", updateCreatorFormState);
     }
 
+    // Plan selector
+    const planBtnA = document.getElementById("planBtnA");
+    const planBtnB = document.getElementById("planBtnB");
+
+    function setPlanActive(plan) {
+      selectedPlan = plan;
+      approvedForMonthly = null;
+      const ACTIVE_BORDER = "#10b981";
+      const ACTIVE_BG = "rgba(16,185,129,0.07)";
+      const IDLE_BORDER = "var(--fv-border)";
+      if (planBtnA) {
+        planBtnA.style.borderColor = plan === C.PLAN_A ? ACTIVE_BORDER : IDLE_BORDER;
+        planBtnA.style.background = plan === C.PLAN_A ? ACTIVE_BG : "";
+      }
+      if (planBtnB) {
+        planBtnB.style.borderColor = plan === C.PLAN_B ? ACTIVE_BORDER : IDLE_BORDER;
+        planBtnB.style.background = plan === C.PLAN_B ? ACTIVE_BG : "";
+      }
+      updateCreatorFormState();
+    }
+
+    if (planBtnA) planBtnA.addEventListener("click", () => setPlanActive(C.PLAN_A));
+    if (planBtnB) planBtnB.addEventListener("click", () => setPlanActive(C.PLAN_B));
+
     if (btnApprove) {
       btnApprove.addEventListener("click", async () => {
         try {
@@ -942,18 +1281,18 @@ if (beneficiaryError) {
 
           const monthly = ownerMonthly?.value?.trim() || "";
           const monthlyAmount = UTILS.parseAmount(monthly, C.DECIMALS_USDC);
-          const totalPrincipal = monthlyAmount.mul(3);
+          const periods = selectedPlan === C.PLAN_B ? C.PERIODS_B : C.PERIODS_A;
+          const totalPrincipal = monthlyAmount.mul(periods);
 
           await TX.send(
-            () => STATE.usdc.approve(C.FLOW, totalPrincipal),
+            () => TX.sendRaw(() => STATE.usdc.populateTransaction.approve(C.FLOW, totalPrincipal)),
             {
               pendingText: I18N.t("tx.pendingApprove"),
-	      successText: I18N.t("tx.successApprove")
-
+              successText: I18N.t("tx.successApprove")
             }
           );
 
-          approvedForMonthly = ownerMonthly?.value?.trim() || "";
+          approvedForMonthly = { value: ownerMonthly?.value?.trim() || "", plan: selectedPlan };
           UI.log(I18N.t("app.usdcApproved"));
           await refreshStats();
           if (STATE.flow) {
@@ -983,14 +1322,28 @@ if (beneficiaryError) {
 
           const monthly = ownerMonthly?.value || "";
           const beneficiary = ownerBeneficiary?.value || "";
+          const memo = (document.getElementById("ownerMemo")?.value?.trim() || "").slice(0, 80);
 
-          await FLOW.createVest(monthly, beneficiary);
+          const vestId = await FLOW.createVest(monthly, beneficiary, selectedPlan);
           approvedForMonthly = null;
+
+          // Save memo to server if provided
+          if (vestId && memo && STATE.account) {
+            fetch(`${C.SCAN_BASE}/api/vest-memo`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ vest_id: Number(vestId), owner: STATE.account, memo })
+            }).catch(() => {});
+          }
+
+          const memoEl = document.getElementById("ownerMemo");
+          if (memoEl) memoEl.value = "";
 
           await refreshStats();
           if (STATE.flow) {
             await FLOW.refreshView();
           }
+          await refreshProtocolTvlFromScanApi();
           await renderOwnerVestList(1);
         } catch (err) {
           console.error("[APP] create failed:", err);
@@ -1046,40 +1399,19 @@ if (beneficiaryError) {
 
   document.addEventListener("visibilitychange", async () => {
     if (!document.hidden) {
-      if (!appInitialized || STATE.isBusy) return;
-      await refreshStats();
-      if (STATE.account && Number(STATE.chainId) === Number(C.CHAIN_ID) && STATE.flow) {
-        try {
-          await FLOW.refreshView();
-        } catch (_) {}
-      }
-      await renderOwnerVestList(ownerVestPage);
+      await resyncWalletUiAfterReveal();
     }
   });
 
   // Mobile browsers (especially when switching to a wallet app) don't always fire
   // visibilitychange reliably. Add focus/pageshow fallbacks to refresh UI.
   window.addEventListener("focus", async () => {
-    if (!appInitialized || STATE.isBusy) return;
-    try {
-      await refreshStats();
-      if (STATE.account && Number(STATE.chainId) === Number(C.CHAIN_ID) && STATE.flow) {
-        await FLOW.refreshView();
-      }
-      await renderOwnerVestList(ownerVestPage);
-    } catch (_) {}
+    await resyncWalletUiAfterReveal();
   });
 
   window.addEventListener("pageshow", async (e) => {
     // Handles bfcache restore on iOS/Android
-    if (!appInitialized || STATE.isBusy) return;
-    try {
-      await refreshStats();
-      if (STATE.account && Number(STATE.chainId) === Number(C.CHAIN_ID) && STATE.flow) {
-        await FLOW.refreshView();
-      }
-      await renderOwnerVestList(ownerVestPage);
-    } catch (_) {}
+    await resyncWalletUiAfterReveal();
   });
 
   async function init() {
@@ -1107,11 +1439,27 @@ if (beneficiaryError) {
       // No wallet found (e.g. plain mobile browser) — treat as disconnected
     }
 
+    // OKX in-app: `okxwallet` / authorized accounts often appear shortly after first `eth_accounts`.
+    if (STATE.walletTransport !== "walletconnect") {
+      for (let i = 0; i < 15 && !STATE.account; i++) {
+        await new Promise((r) => setTimeout(r, 200));
+        try {
+          await WALLET.refreshAccount();
+        } catch (_) {}
+        if (STATE.account) break;
+      }
+    }
+
     if (STATE.account && Number(STATE.chainId) === Number(C.CHAIN_ID)) {
-      CONTRACTS.init(STATE);
+      const initErr = await tryInitContracts(3);
+      if (initErr && !STATE.flow) {
+        console.error("[APP] CONTRACTS.init failed:", initErr);
+        UI.showError(initErr.message || "Contract init failed");
+      }
       UI.setConnected();
 
       await runRefresh();
+      scheduleDeferredRunRefresh();
     } else if (STATE.account) {
       UI.updateWalletBtn();
       UI.updateAccountInfo();
@@ -1126,7 +1474,7 @@ if (beneficiaryError) {
     startAutoRefresh();
     syncWalletMenu();
 
-    UI.showStatus(I18N.t("status.ready"), "info");
+    UI.showStatusKey("status.ready", "info");
     appInitialized = true;
   }
 
@@ -1140,11 +1488,31 @@ if (beneficiaryError) {
       STATE.claimablePreparing = false;
       STATE.claimablePreparePromise = null;
       STATE.postClaimStaleGuardUntil = null;
+      STATE.postClaimZeroSeenAt = 0;
+
+      // WalletConnect (e.g. MetaMask QR): session can report an address before ethers
+      // signer is wired; one more refresh avoids CONTRACTS.init: signer missing.
+      if (
+        STATE.walletTransport === "walletconnect" &&
+        STATE.account &&
+        window.WALLET?.refreshAccount
+      ) {
+        try {
+          await WALLET.refreshAccount();
+        } catch (e) {
+          console.warn("[APP] WC refreshAccount before CONTRACTS.init:", e);
+        }
+      }
 
       if (STATE.account && Number(STATE.chainId) === Number(C.CHAIN_ID)) {
-        await CONTRACTS.init(STATE);
+        const initErr = await tryInitContracts(3);
+        if (initErr && !STATE.flow) {
+          console.error("[APP] CONTRACTS.init failed:", initErr);
+          UI.showError(initErr.message || "Contract init failed");
+        }
         UI.setConnected();
         await runRefresh();
+        scheduleDeferredRunRefresh();
       } else if (STATE.account) {
         UI.updateWalletBtn();
         UI.updateAccountInfo();

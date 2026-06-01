@@ -11,7 +11,7 @@
     // Prefer direct RPC for reads to avoid wallet RPC throttling.
     const readProvider =
       state.readProvider ||
-      new ethers.providers.JsonRpcBatchProvider(C.RPC_URL);
+      new ethers.providers.JsonRpcProvider(C.RPC_URL);
     state.readProvider = readProvider;
 
     const readUsdc = new ethers.Contract(usdcAddr, ABI.ERC20, readProvider);
@@ -39,6 +39,18 @@
     state.readFlow = new ethers.Contract(flowAddr, ABI.FLOW, readProvider);
     state.readUsdc = readUsdc;
 
+    // Sync on-chain caps into C so UI reflects deployed values
+    try {
+      const [onChainTvlCap, onChainMaxPrincipal] = await Promise.all([
+        state.readFlow.tvlCap(),
+        state.readFlow.maxPrincipal(),
+      ]);
+      C.TVL_CAP_USDC = Number(ethers.utils.formatUnits(onChainTvlCap, C.DECIMALS_USDC));
+      C.MAX_PRINCIPAL_USDC = Number(ethers.utils.formatUnits(onChainMaxPrincipal, C.DECIMALS_USDC));
+    } catch (e) {
+      console.warn("[CONTRACTS] failed to read tvlCap/maxPrincipal from chain", e);
+    }
+
     UI.setText("flowAddr", flowAddr);
     UI.setText("usdcAddr", usdcAddr);
   }
@@ -49,41 +61,6 @@
     state.readFlow = null;
     state.readUsdc = null;
   }
- 
-  async function loadStats() {
-  if (!STATE.flow) return;
-
-  try {
-    // protocol TVL
-    const tvl = await STATE.flow.totalLocked();
-
-    // vest count
-    const vestCount = await STATE.flow.vestCount();
-
-    // usage 
-    const usage = await STATE.flow.usagePercent();
-
-    // user balance
-    let balance = 0;
-    let due = 0;
-
-    if (STATE.account) {
-      balance = await STATE.usdc.balanceOf(STATE.account);
-      due = await STATE.flow.claimableOf(STATE.account);
-    }
-
-    return {
-      tvl,
-      vestCount,
-      usage,
-      balance,
-      due
-    };
-
-  } catch (e) {
-    console.error("loadStats error", e);
-  }
-}
 
   window.CONTRACTS = { init, clear };
 })();

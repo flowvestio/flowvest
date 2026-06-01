@@ -1,21 +1,24 @@
 (function () {
-  const EARLY_ACCESS_ENABLED = true; // 改为 false 即关闭邀请码限制，全员开放
+  const EARLY_ACCESS_ENABLED = false; // 改为 false 即关闭邀请码限制，全员开放
 
   const STORAGE_KEY = "fv_early_access";
 
   const INVITE_CODES = [
-    "FLOW2026", "VEST0001", "VEST0002", "VEST0003", "VEST0004",
-    "ALPHA001", "ALPHA002", "ALPHA003", "MAINNET1", "MAINNET2"
+    "FLOW2027", "VEST1001", "VEST1002", "VEST1003", "VEST1004"
   ];
 
   function checkAccess() {
-    return localStorage.getItem(STORAGE_KEY) === "granted";
+    try {
+      return localStorage.getItem(STORAGE_KEY) === "granted";
+    } catch (_) {
+      return false;
+    }
   }
 
   function validateCode(input) {
     const code = (input || "").trim().toUpperCase();
     if (INVITE_CODES.includes(code)) {
-      localStorage.setItem(STORAGE_KEY, "granted");
+      try { localStorage.setItem(STORAGE_KEY, "granted"); } catch (_) {}
       return true;
     }
     return false;

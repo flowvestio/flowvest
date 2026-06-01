@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg version="2.0" xmlns="http://www.w3.org/2000/svg"
+     baseProfile="tiny-ps"
+     viewBox="0 0 100 100"
+     width="100" height="100">
+  <title>Flowvest</title>
+
+  <!-- Background circle (required for BIMI to display correctly) -->
+  <circle cx="50" cy="50" r="50" fill="#ffffff"/>
+
+  <!-- Logo centered in viewBox using translate -->
+  <g transform="translate(50,50) scale(0.88)">
+    <!-- Teardrop shape, centered at 0,0: spans from y=-47 to y=41 -->
+    <path d="M 0 -44
+             C 2 -40, 22 -22, 26 2
+             C 26 18, 14 38, 0 38
+             C -14 38, -26 18, -26 2
+             C -26 -22, -2 -40, 0 -44 Z"
+          fill="#172554"/>
+
+    <!-- Inner clock circle -->
+    <circle cx="0" cy="6" r="21" fill="white" stroke="#172554" stroke-width="1.5"/>
+
+    <!-- Hour tick marks -->
+    <line x1="0" y1="-13.5" x2="0" y2="-10.5" stroke="#172554" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="9.5" y1="-11.2" x2="8" y2="-8.6" stroke="#172554" stroke-width="1" stroke-linecap="round"/>
+    <line x1="17.2" y1="-3.5" x2="14.6" y2="-2" stroke="#172554" stroke-width="1" stroke-linecap="round"/>
+    <line x1="20.5" y1="6" x2="17.5" y2="6" stroke="#172554" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="17.2" y1="15.5" x2="14.6" y2="14" stroke="#172554" stroke-width="1" stroke-linecap="round"/>
+    <line x1="9.5" y1="23.2" x2="8" y2="20.6" stroke="#172554" stroke-width="1" stroke-linecap="round"/>
+    <line x1="0" y1="25.5" x2="0" y2="22.5" stroke="#172554" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="-9.5" y1="23.2" x2="-8" y2="20.6" stroke="#172554" stroke-width="1" stroke-linecap="round"/>
+    <line x1="-17.2" y1="15.5" x2="-14.6" y2="14" stroke="#172554" stroke-width="1" stroke-linecap="round"/>
+    <line x1="-20.5" y1="6" x2="-17.5" y2="6" stroke="#172554" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="-17.2" y1="-3.5" x2="-14.6" y2="-2" stroke="#172554" stroke-width="1" stroke-linecap="round"/>
+    <line x1="-9.5" y1="-11.2" x2="-8" y2="-8.6" stroke="#172554" stroke-width="1" stroke-linecap="round"/>
+
+    <!-- Hour hand (~10 o'clock) -->
+    <line x1="0" y1="6" x2="-7" y2="-2" stroke="#172554" stroke-width="2" stroke-linecap="round"/>
+    <!-- Minute hand (~2 o'clock) -->
+    <line x1="0" y1="6" x2="7" y2="-6" stroke="#172554" stroke-width="1.5" stroke-linecap="round"/>
+    <!-- Center dot -->
+    <circle cx="0" cy="6" r="1.8" fill="#172554"/>
+
+    <!-- Star / sparkle at top -->
+    <g transform="translate(0, -33)">
+      <line x1="0" y1="-5" x2="0" y2="5" stroke="white" stroke-width="1.2" stroke-linecap="round"/>
+      <line x1="-5" y1="0" x2="5" y2="0" stroke="white" stroke-width="1.2" stroke-linecap="round"/>
+      <line x1="-3.5" y1="-3.5" x2="3.5" y2="3.5" stroke="white" stroke-width="0.8" stroke-linecap="round"/>
+      <line x1="3.5" y1="-3.5" x2="-3.5" y2="3.5" stroke="white" stroke-width="0.8" stroke-linecap="round"/>
+    </g>
+  </g>
+</svg>

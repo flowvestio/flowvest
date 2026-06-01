@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flowvest Saving</title>
+  <meta name="description" content="Flowvest Saving — Lock USDC on Base. No early withdrawal." />
+  <link rel="icon" type="image/png" href="/assets/logo/flowvest-logo.png" />
+  <link rel="stylesheet" href="assets/css/tailwind.min.css?v=20260320a" />
+  <link rel="stylesheet" href="assets/css/saving.css?v=20260425" />
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.23.8/dist/index.umd.js"></script>
+  <script>
+    (function () {
+      const stored = (() => { try { return localStorage.getItem("fv_theme"); } catch(_){ return null; } })();
+      document.documentElement.classList.toggle("dark", stored == null ? true : stored === "dark");
+    })();
+  </script>
+  <style>
+    .saving-header {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .saving-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: inherit;
+      min-width: 0;
+      flex: 1 1 0;
+    }
+    .saving-logo {
+      width: 40px;
+      height: 40px;
+      border-radius: 16px;
+      border: 1px solid var(--fv-border);
+      flex-shrink: 0;
+    }
+    .saving-brand-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 20px;
+      line-height: 28px;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+    }
+    .saving-brand-meta {
+      color: var(--fv-muted);
+      margin-top: 2px;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    .saving-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    @media (max-width: 640px) {
+      .saving-header {
+        align-items: center;
+        gap: 10px;
+      }
+      .saving-brand {
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+      .saving-logo {
+        width: 42px !important;
+        height: 42px !important;
+        border-radius: 14px !important;
+      }
+      .saving-brand-title {
+        font-size: 22px !important;
+        line-height: 1.05 !important;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .saving-brand-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px 8px;
+        margin-top: 5px !important;
+        font-size: 14px !important;
+        line-height: 1.2 !important;
+      }
+      .saving-brand-meta > span,
+      .saving-brand-meta > div {
+        display: inline !important;
+        margin-top: 0 !important;
+        white-space: nowrap;
+      }
+      .saving-brand-meta > div::before {
+        content: "· ";
+      }
+      .saving-header-actions {
+        gap: 8px;
+      }
+      #btnTheme {
+        width: 44px !important;
+        height: 44px !important;
+        flex: 0 0 44px;
+      }
+      #btnConnect {
+        min-width: 136px !important;
+        max-width: 168px !important;
+        height: 44px !important;
+        padding: 0 14px !important;
+        font-size: 14px !important;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+    @media (max-width: 380px) {
+      .saving-header {
+        flex-wrap: wrap;
+      }
+      .saving-header-actions {
+        margin-left: 52px;
+        width: calc(100% - 52px);
+        justify-content: flex-end;
+      }
+      #btnConnect {
+        flex: 1 1 auto;
+        max-width: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="saving-header">
+    <a href="https://app.flowvest.io" class="saving-brand">
+      <img src="/assets/logo/flowvest-logo.png" class="saving-logo" alt="Flowvest" onerror="this.style.display='none'" />
+      <div style="min-width:0;">
+        <div class="saving-brand-title">
+          <span>Flowvest</span>
+        </div>
+        <div class="saving-brand-meta">
+          <span style="color:#10b981; font-weight:800;">Saving V1.1</span>
+          <span> Base USDC</span>
+          <div style="font-size:12px; margin-top:2px;">TVL Cap: 30k</div>
+        </div>
+      </div>
+    </a>
+    <div class="saving-header-actions">
+      <button id="btnTheme" onclick="toggleTheme()" style="width:44px; height:44px; border-radius:8px; border:1px solid var(--fv-border); background:var(--fv-surface); color:var(--fv-text); cursor:pointer; font-size:20px; display:flex; align-items:center; justify-content:center;">
+        <span id="themeIcon">☀</span>
+      </button>
+      <div style="position:relative;">
+        <button id="btnConnect" onclick="onWalletButtonClick()" style="height:44px; min-width:180px; padding:0 24px; border-radius:12px; font-family:inherit; font-size:15px; font-weight:700; background:#10b981; color:#000; border:none; cursor:pointer; transition:background 0.15s; box-shadow:0 2px 8px #10b98140;">
+          Connect Wallet
+        </button>
+        <div id="walletMenu" style="display:none; position:absolute; right:0; top:calc(100% + 8px); background:var(--fv-surface); border:1px solid var(--fv-border); border-radius:12px; overflow:hidden; min-width:160px; box-shadow:0 8px 24px #00000040; z-index:100;">
+          <button onclick="copyAddress()"     style="display:block; width:100%; padding:12px 16px; text-align:left; font-family:inherit; font-size:14px; background:none; border:none; color:var(--fv-text); cursor:pointer;" onmouseover="this.style.background='#10b98120'" onmouseout="this.style.background='none'">Copy Address</button>
+          <button onclick="viewExplorer()"    style="display:block; width:100%; padding:12px 16px; text-align:left; font-family:inherit; font-size:14px; background:none; border:none; color:var(--fv-text); cursor:pointer;" onmouseover="this.style.background='#10b98120'" onmouseout="this.style.background='none'">View Explorer</button>
+          <button onclick="disconnectWallet()" style="display:block; width:100%; padding:12px 16px; text-align:left; font-family:inherit; font-size:14px; background:none; border:none; color:#f87171; cursor:pointer;" onmouseover="this.style.background='#f8717120'" onmouseout="this.style.background='none'">Disconnect</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="walletChooserOverlay" style="display:none; position:fixed; inset:0; z-index:1000;">
+    <div onclick="closeWalletChooser()" style="position:absolute; inset:0; background:#0008;"></div>
+    <div style="position:relative; max-width:448px; margin:24px auto; padding:0 16px;">
+      <div style="background:var(--fv-surface); color:var(--fv-text); border:1px solid var(--fv-border); border-radius:16px; padding:16px; box-shadow:0 20px 60px #0008; max-height:calc(100vh - 48px); overflow-y:auto;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+          <div style="font-size:20px; font-weight:800;">Connect Wallet</div>
+          <button onclick="closeWalletChooser()" style="width:44px; height:44px; border-radius:12px; border:1px solid var(--fv-border); background:var(--fv-surface); color:var(--fv-text); font-size:24px; cursor:pointer;">×</button>
+        </div>
+        <div style="color:var(--fv-muted); font-size:14px; margin-top:8px;">Choose a wallet or scan QR to connect</div>
+
+        <div style="display:flex; align-items:center; gap:12px; margin:18px 0 12px;">
+          <div style="height:1px; background:var(--fv-border); flex:1;"></div>
+          <div style="color:var(--fv-muted); font-size:12px; font-weight:700;">Browser Wallet</div>
+          <div style="height:1px; background:var(--fv-border); flex:1;"></div>
+        </div>
+
+        <div style="display:grid; gap:12px;">
+          <div>
+            <button onclick="connectInjectedWallet('metamask')" style="width:100%; padding:12px 16px; border-radius:12px; border:1px solid var(--fv-border); background:var(--fv-surface); color:var(--fv-text); text-align:left; font-size:18px; font-weight:700; cursor:pointer;">MetaMask</button>
+            <div style="color:var(--fv-muted); font-size:12px; margin:4px 0 0 6px;">MetaMask wallet browser</div>
+          </div>
+          <div>
+            <button onclick="connectInjectedWallet('trust')" style="width:100%; padding:12px 16px; border-radius:12px; border:1px solid var(--fv-border); background:var(--fv-surface); color:var(--fv-text); text-align:left; font-size:18px; font-weight:700; cursor:pointer;">Trust Wallet</button>
+            <div style="color:var(--fv-muted); font-size:12px; margin:4px 0 0 6px;">Trust wallet browser</div>
+          </div>
+          <div>
+            <button onclick="connectInjectedWallet('other')" style="width:100%; padding:12px 16px; border-radius:12px; border:1px solid var(--fv-border); background:var(--fv-surface); color:var(--fv-text); text-align:left; font-size:18px; font-weight:700; cursor:pointer;">Other Wallet</button>
+            <div style="color:var(--fv-muted); font-size:12px; margin:4px 0 0 6px;">OKX · Bitget · Base · Baby · and more</div>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:12px; margin:18px 0 12px;">
+          <div style="height:1px; background:var(--fv-border); flex:1;"></div>
+          <div style="color:var(--fv-muted); font-size:12px; font-weight:700;">Scan with QR</div>
+          <div style="height:1px; background:var(--fv-border); flex:1;"></div>
+        </div>
+
+        <div style="border:1px solid var(--fv-border); border-radius:16px; padding:12px;">
+          <div id="wcQrPlaceholder" style="min-height:208px; border:1px solid var(--fv-border); border-radius:12px; display:flex; align-items:center; justify-content:center; color:var(--fv-muted); font-family:monospace; letter-spacing:2px;">QR CODE</div>
+          <div id="wcQrBox" style="display:none; min-height:208px; align-items:center; justify-content:center;"></div>
+          <div id="wcQrHint" style="color:var(--fv-muted); text-align:center; font-size:12px; margin-top:10px;">Tap "Show QR" to generate a WalletConnect code.</div>
+          <div style="display:flex; justify-content:center; margin-top:10px;">
+            <button id="btnShowWCQR" onclick="showWalletConnectQr()" style="padding:10px 20px; border-radius:12px; border:0; background:#10b981; color:#000; font-weight:800; cursor:pointer;">Show QR</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Balance -->
+  <div class="config-box" style="margin-bottom:16px; padding:8px 16px;">
+    <span style="color:var(--fv-muted); font-size:12px; text-transform:uppercase; letter-spacing:1px;">My Balance</span>
+    &nbsp;&nbsp;
+    <span id="usdcBalance" style="font-size:15px; font-weight:bold;">—</span>
+    <span style="color:var(--fv-muted); font-size:13px;"> USDC</span>
+  </div>
+
+  <!-- Config -->
+  <div class="config-box">
+    <label>Contract Address</label>
+    <div class="config-row">
+      <input type="text" id="contractAddr" value="0x10e7D68aF2230E43BB88336173567f8e800Ba664" />
+    </div>
+  </div>
+
+  <!-- TVL / verified -->
+  <div style="font-size:12px; color:var(--fv-muted); margin-bottom:20px;">
+    TVL: <span id="tvlDisplay" style="color:var(--fv-text); font-weight:bold;">—</span> / 30k
+    &nbsp;·&nbsp; Contract Verified ·
+    <a href="https://basescan.org/address/0x10e7d68af2230e43bb88336173567f8e800ba664#code" target="_blank" rel="noopener" style="color:#10b981; text-decoration:none;">View on BaseScan ↗</a>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs" style="display:flex; align-items:center;">
+    <button class="tab active" onclick="switchTab('create')">Create Plan</button>
+    <button class="tab" onclick="switchTab('deposit')">Deposit</button>
+    <button class="tab" onclick="switchTab('claim')">Claim</button>
+    <a href="https://scan.flowvest.io/saving.html" target="_blank" rel="noopener" style="margin-left:auto; font-size:12px; color:#10b981; text-decoration:none; white-space:nowrap; padding:10px 4px;">Explorer ↗</a>
+  </div>
+
+  <!-- ==================== CREATE ==================== -->
+  <div class="panel active" id="panel-create">
+    <p style="font-size:13px; color:var(--fv-muted); margin-bottom:16px;">Lock money. Get it later.</p>
+    <div class="card">
+      <div class="card-title">Set your goal</div>
+      <div class="chips">
+        <button class="chip" onclick="selectGoal(200, this)">$200</button>
+        <button class="chip" onclick="selectGoal(500, this)">$500</button>
+        <button class="chip" onclick="selectGoal(1000, this)">$1000</button>
+        <button class="chip" onclick="selectGoal(3000, this)">$3000</button>
+      </div>
+      <label>Custom amount (USD)</label>
+      <input type="number" id="customGoal" placeholder="Min $200" min="200" max="3000" step="1" oninput="onCustomGoal(this.value)" />
+      <div id="goalHint" style="font-size:12px; margin-top:6px; display:none;"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">How long do you want to lock it?</div>
+      <div style="font-size:12px; color:#10b981; margin-bottom:10px;">Monthly based on 30 days</div>
+      <div class="duration-options">
+        <label class="duration-option" onclick="selectDuration(7776000, this)">
+          <input type="radio" name="duration" value="7776000" />
+          <span class="duration-label">3 months</span><span class="duration-desc">— Try it out</span>
+        </label>
+        <label class="duration-option" onclick="selectDuration(15552000, this)">
+          <input type="radio" name="duration" value="15552000" />
+          <span class="duration-label">6 months</span><span class="duration-desc">— Build a habit</span>
+        </label>
+        <label class="duration-option" onclick="selectDuration(31104000, this)">
+          <input type="radio" name="duration" value="31104000" />
+          <span class="duration-label">12 months</span><span class="duration-desc">— Serious saving</span>
+        </label>
+        <label class="duration-option" onclick="selectDuration(46656000, this)">
+          <input type="radio" name="duration" value="46656000" />
+          <span class="duration-label">18 months</span><span class="duration-desc">— Long-term discipline</span>
+        </label>
+      </div>
+      <div class="unlock-preview" id="unlockPreview">
+        Unlocks on: <span class="hl" id="unlockDate">—</span><br/>
+        <span style="color:#888; font-size:12px;">Funds are locked until this date</span>
+      </div>
+    </div>
+    <div id="createSummary" style="display:none; background:#10b98115; border:1px solid #10b98140; border-radius:6px; padding:14px 16px; margin-bottom:12px; font-size:14px; line-height:1.8;">
+      <div style="color:var(--fv-muted); font-size:11px; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;">You are saving</div>
+      <div style="font-weight:bold; color:var(--fv-text);"><span id="summaryGoal">—</span> · <span id="summaryMonths">—</span></div>
+      <div style="color:#10b981;">Unlocks on: <span id="summaryUnlock">—</span></div>
+    </div>
+    <p style="font-size:12px; color:#888; line-height:1.6; margin-bottom:10px;">Locked until unlock date<br/>No early withdrawal</p>
+    <button class="btn btn-primary" id="btnCreate" onclick="createPlan()" disabled>Start saving →</button>
+    <div class="status" id="statusCreate"></div>
+    <div class="disclaimer">No early withdrawals · <span>Secured by smart contracts</span></div>
+  </div>
+
+  <!-- ==================== DEPOSIT ==================== -->
+  <div class="panel" id="panel-deposit">
+    <p style="font-size:12px; color:#888; line-height:1.6; margin-bottom:12px;">
+      Anyone can add funds to this plan.<br/>Funds can be added up to 120% of the goal.<br/>You can deposit anytime.<br/>Only the plan owner can withdraw.
+    </p>
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-title">My Plans</div>
+      <div id="myPlansList" style="font-size:13px; color:#888;">Connect wallet to load.</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Load Plan</div>
+      <label>Plan ID</label>
+      <div style="display:flex; gap:8px;">
+        <input type="number" id="depositPlanId" placeholder="e.g. 1" min="1" step="1" style="flex:1;" />
+        <button class="btn btn-outline" style="width:auto; margin-top:0; padding:9px 16px;" onclick="loadPlanForDeposit()">Load</button>
+      </div>
+      <div class="plan-info" id="depositPlanInfo"></div>
+    </div>
+    <div class="card" id="depositForm" style="display:none;">
+      <div class="card-title">Deposit</div>
+      <label>Amount (USD)</label>
+      <input type="number" id="depositAmount" placeholder="e.g. 100" min="1" step="1" oninput="checkDonateNotice()" />
+      <div class="donate-notice" id="donateNotice">
+        <div>
+          ⚠ You are depositing to someone else's plan.<br/>
+          Only the owner can withdraw these funds.<br/>
+          This cannot be reversed.
+          <label style="display:flex; align-items:center; gap:8px; margin-top:10px; cursor:pointer; font-weight:bold; color:#92400e;">
+            <input type="checkbox" id="donateConfirm" onchange="onDonateConfirmChange()" style="width:16px; height:16px; accent-color:#92400e; cursor:pointer;" />
+            I understand I cannot withdraw these funds
+          </label>
+        </div>
+      </div>
+      <button class="btn btn-outline" id="btnApprove" onclick="approveUsdc()" style="display:none;">1. Approve USDC</button>
+      <button class="btn btn-primary" id="btnDeposit" onclick="doDeposit()">Deposit →</button>
+    </div>
+    <div class="status" id="statusDeposit"></div>
+  </div>
+
+  <!-- ==================== CLAIM ==================== -->
+  <div class="panel" id="panel-claim">
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-title">My Plans</div>
+      <div id="myPlansListClaim" style="font-size:13px; color:#888;">Connect wallet to load.</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Load Plan</div>
+      <label>Plan ID</label>
+      <div style="display:flex; gap:8px;">
+        <input type="number" id="claimPlanId" placeholder="e.g. 1" min="1" step="1" style="flex:1;" />
+        <button class="btn btn-outline" style="width:auto; margin-top:0; padding:9px 16px;" onclick="loadPlanForClaim()">Load</button>
+      </div>
+      <div class="plan-info" id="claimPlanInfo"></div>
+    </div>
+    <button class="btn btn-primary" id="btnClaim" onclick="doClaim()" style="display:none;">Claim →</button>
+    <div class="status" id="statusClaim"></div>
+  </div>
+
+  <!-- Footer -->
+  <div style="display:flex; align-items:center; justify-content:center; gap:32px; margin-top:40px; margin-bottom:16px;">
+    <a href="https://x.com/flowvestio" target="_blank" rel="noopener" style="color:var(--fv-muted)" aria-label="X">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.733-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+    </a>
+    <a href="https://github.com/flowvestio/flowvest" target="_blank" rel="noopener" style="color:var(--fv-muted)" aria-label="GitHub">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
+    </a>
+    <a href="https://t.me/+eHBjejs08rBiYTU1" target="_blank" rel="noopener" style="color:var(--fv-muted)" aria-label="Telegram">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+    </a>
+  </div>
+  <div style="font-size:12px; text-align:center; color:var(--fv-muted); line-height:1.8; margin-bottom:4px;">
+    <div>Need help? <a href="mailto:support@flowvest.io" style="color:#06b6d4;">support@flowvest.io</a></div>
+    <div>Security issues? <a href="mailto:security@flowvest.io" style="color:#06b6d4;">security@flowvest.io</a></div>
+    <div style="color:#f59e0b99; margin-top:4px;">Flowvest will never ask for your private key.</div>
+  </div>
+  <div style="font-size:12px; text-align:center; margin:12px 0 32px; color:var(--fv-muted);">
+    © 2026 Flowvest · Built on Base · USDC · <span id="uiVersion"></span>
+  </div>
+
+</div>
+<script src="assets/js/saving.js?v=20260429g"></script>
+</body>
+</html>

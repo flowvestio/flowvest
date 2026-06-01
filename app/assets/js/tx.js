@@ -1,4 +1,44 @@
 (function () {
+  function patchEthersFormatter() {
+    const proto = window.ethers?.providers?.Formatter?.prototype;
+    if (!proto || proto.__flowvestPatched) return;
+    proto.__flowvestPatched = true;
+
+    const missing = (value) => value == null || value === "undefined" || value === "null";
+    const normalizeTx = (tx) => {
+      if (!tx || typeof tx !== "object") return tx;
+      const normalized = { ...tx };
+      Object.keys(normalized).forEach((key) => {
+        if (normalized[key] === undefined) delete normalized[key];
+      });
+      if (missing(normalized.value)) normalized.value = "0x0";
+      if (missing(normalized.gasLimit)) normalized.gasLimit = normalized.gas ?? normalized.gas_limit ?? "0x0";
+      if (missing(normalized.gasPrice) && !missing(normalized.maxFeePerGas)) normalized.gasPrice = normalized.maxFeePerGas;
+      if (missing(normalized.maxFeePerGas)) delete normalized.maxFeePerGas;
+      if (missing(normalized.maxPriorityFeePerGas)) delete normalized.maxPriorityFeePerGas;
+      return normalized;
+    };
+
+    const origCheck = proto.check;
+    proto.check = function(format, object) {
+      return origCheck.call(this, format, normalizeTx(object));
+    };
+
+    const origNumber = proto.number;
+    if (origNumber) {
+      proto.number = function(value) {
+        return origNumber.call(this, missing(value) ? "0x0" : value);
+      };
+    }
+
+    const origTxResponse = proto.transactionResponse;
+    proto.transactionResponse = function(transaction) {
+      return origTxResponse.call(this, normalizeTx(transaction));
+    };
+  }
+
+  patchEthersFormatter();
+
   function showTxStatus(msg, type, htmlOpts, claimStatus) {
     if (claimStatus) {
       const el = document.getElementById("kpiClaimStatus");
@@ -26,6 +66,52 @@
     const explorerLinkText = window.I18N ? I18N.t("tx.viewOnExplorer") : "View On Explorer ↗";
     el.innerHTML = `<a href="${UI.escapeHtml(txUrl)}" target="_blank" rel="noopener noreferrer" class="text-emerald-400 underline">${explorerLinkText}</a>`;
     el.style.display = "block";
+  }
+
+  function toRpcQuantity(value) {
+    if (value == null) return null;
+    if (ethers.BigNumber.isBigNumber(value)) return value.isZero() ? null : value.toHexString();
+    try {
+      const bn = ethers.BigNumber.from(value);
+      return bn.isZero() ? null : bn.toHexString();
+    } catch (_) {
+      return value;
+    }
+  }
+
+  async function sendRaw(populateFactory) {
+    if (!STATE.account) throw new Error("Wallet not connected");
+    const eth = STATE.provider?.provider;
+    if (!eth?.request) throw new Error("Wallet provider not available");
+
+    const txReq = await populateFactory();
+    if (!txReq?.to || !txReq?.data) throw new Error("Transaction data was not created");
+
+    const txParams = {
+      from: ethers.utils.getAddress(STATE.account),
+      to: ethers.utils.getAddress(txReq.to),
+      data: txReq.data,
+    };
+
+    const value = toRpcQuantity(txReq.value);
+    const gas = toRpcQuantity(txReq.gasLimit || txReq.gas);
+    if (value) txParams.value = value;
+    if (gas) txParams.gas = gas;
+
+    const hash = await eth.request({
+      method: "eth_sendTransaction",
+      params: [txParams],
+    });
+
+    return {
+      hash,
+      wait: async () => {
+        if (STATE.readProvider) {
+          return STATE.readProvider.waitForTransaction(hash, 1, 120000);
+        }
+        return STATE.provider.waitForTransaction(hash, 1, 120000);
+      },
+    };
   }
 
   async function send(txFactory, opts = {}) {
@@ -88,5 +174,5 @@
     }
   }
 
-  window.TX = { send };
+  window.TX = { send, sendRaw };
 })();

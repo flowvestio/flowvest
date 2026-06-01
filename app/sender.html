@@ -3,8 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Flowvest V1 – Sender</title>
+  <title>Flowvest V1.1 – Sender</title>
+  <meta name="description" content="Flowvest V1.1 sender view: schedule USDC payments on Base and optionally terminate after the window opens." />
   <link rel="icon" type="image/png" href="/assets/logo/flowvest-logo.png" />
+  <link rel="apple-touch-icon" href="/assets/logo/flowvest-logo.png" />
 
   <!-- Tailwind (compiled, production build) -->
   <link rel="stylesheet" href="assets/css/tailwind.min.css?v=20260320a">
@@ -121,21 +123,18 @@
 
     <!-- Header -->
     <div class="flex items-start justify-between gap-4">
-      <div class="flex items-center gap-3">
+      <a href="https://app11.flowvest.io" class="flex items-center gap-3" style="text-decoration:none;color:inherit">
         <img src="/assets/logo/flowvest-logo.png" class="h-10 w-10 rounded-2xl border border-slate-200 dark:border-slate-800" alt="Flowvest" />
         <div>
           <div class="text-xl font-extrabold tracking-tight flex items-center gap-2">
             <span>Flowvest</span>
-            <span class="px-2 py-0.5 text-xs font-semibold rounded-md border border-emerald-500/40 bg-emerald-500/10 text-emerald-300">
-              V1
-            </span>
           </div>
           <div
             id="metaChips"
             class="mt-1.5 flex flex-col gap-0.5 text-sm leading-snug"
           ></div>
         </div>
-      </div>
+      </a>
 
       <!-- Locale + Theme + Connect wallet -->
       <div class="ml-auto flex items-start gap-1.5 sm:gap-3">
@@ -165,9 +164,13 @@
           >
             Connect Wallet
           </button>
-          <div class="text-xs text-slate-400 mt-2 text-center md:hidden" data-i18n="wallet.mobileHint">
-            Recommended mobile wallets: MetaMask Wallet
-          </div>
+
+          <!-- Identity badge (e.g. Early user) -->
+          <div
+            id="walletIdentityBadge"
+            class="hidden mt-2 text-center text-xs font-semibold text-emerald-400"
+            aria-live="polite"
+          ></div>
 
           <div
             id="walletMenu"
@@ -251,7 +254,7 @@
                 data-i18n="wallet.okx"
                 data-connect-injected="1"
               >
-                OKX Wallet
+                Trust Wallet
               </button>
               <p class="fv-muted text-[11px] mt-1.5 pl-1" data-i18n="wallet.okxHint">
                 Recommended for mobile
@@ -268,7 +271,7 @@
                 Other Wallet
               </button>
               <p class="fv-muted text-[11px] mt-1.5 pl-1" data-i18n="wallet.otherHint">
-                Trust · Bitget · Base · Baby · and more
+                OKX · Bitget · Base · Baby · and more
               </p>
             </div>
           </div>
@@ -305,12 +308,40 @@
                 Open MetaMask
               </button>
               <button
+                id="btnOpenOKX"
+                type="button"
+                class="px-5 py-2.5 rounded-xl bg-emerald-600/10 hover:bg-emerald-600/15 border border-emerald-500/30 text-emerald-300 text-sm font-semibold transition"
+              >
+                Open OKX
+              </button>
+              <button
                 id="btnCopyWcLink"
                 type="button"
                 class="px-5 py-2.5 rounded-xl fv-surface border text-sm font-semibold hover:opacity-90 transition"
               >
                 Copy Link
               </button>
+              <div id="wcUriWrap" class="hidden w-full mt-2">
+                <div class="flex gap-2 items-center justify-center">
+                  <input
+                    id="wcUriInput"
+                    type="text"
+                    readonly
+                    class="fv-surface border rounded-xl px-3 py-2 text-xs font-mono w-full max-w-[420px]"
+                    placeholder="wc:..."
+                  />
+                  <a
+                    id="wcUriOpenLink"
+                    href="#"
+                    class="px-4 py-2 rounded-xl bg-emerald-600/10 hover:bg-emerald-600/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold transition whitespace-nowrap"
+                  >
+                    Open
+                  </a>
+                </div>
+                <div class="fv-muted text-[11px] text-center mt-2">
+                  If scanning doesn’t respond, use wallet in-app browser or tap Open.
+                </div>
+              </div>
             </div>
           </div>
           <p class="fv-muted text-xs mt-4 text-center" data-i18n="wallet.chooserTip">
@@ -341,7 +372,7 @@
         <span class="ml-1" data-i18n="contract.sourceVerifiedMid" style="color:#a855f7">Source Code</span>
         <span class="ml-1" data-i18n="contract.sourceVerifiedPost">Verified</span>
         <span class="mx-1">·</span>
-        <a href="https://basescan.org/address/0x1C3945D7588565daB4514Cbd7772fEe329E2A12d#code" target="_blank" class="text-cyan-400 hover:text-cyan-300 transition" style="white-space:nowrap" data-i18n="contract.viewOnBaseScan">View on BaseScan ↗</a>
+        <a href="https://sepolia.basescan.org/address/0x176DA4a26F7ACAebf6C10A15d0490e7FAf58a122#code" target="_blank" class="text-cyan-400 hover:text-cyan-300 transition" style="white-space:nowrap" data-i18n="contract.viewOnBaseScan">View on BaseScan ↗</a>
       </div>
       <a id="scanBtn" href="https://scan.flowvest.io" target="_blank"
         class="inline-flex w-fit text-sm text-cyan-400 hover:text-cyan-300 transition"
@@ -351,17 +382,15 @@
     </div>
 
     <!-- Early Access Gate -->
-<div id="earlyAccessGate" class="fv-surface mt-6 rounded-2xl border p-6 text-center space-y-4" style="display:none">
-  <div class="text-base font-semibold" data-i18n="early.title">Early Access</div>
-  <div class="text-sm fv-muted" data-i18n="early.desc">Enter your invite code to get started</div>
-  <input id="earlyAccessInput" type="text" autocomplete="off" spellcheck="false"
-    class="fv-input w-full max-w-xs mx-auto block rounded-xl border px-4 py-2 text-center text-sm outline-none focus:border-emerald-400"
-    data-i18n-placeholder="early.placeholder" placeholder="Enter invite code" />
-  <button id="earlyAccessBtn"
-    class="px-6 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white text-sm font-semibold"
-    data-i18n="early.submit">Submit</button>
-  <div id="earlyAccessError" class="text-sm text-red-400" style="display:none"></div>
-</div>
+    <div id="earlyAccessGate" class="fv-surface mt-6 rounded-2xl border p-6 text-center" style="display:none">
+      <div class="font-semibold text-base mb-1" data-i18n="early.title">Early Access</div>
+      <div class="fv-muted text-sm mb-4" data-i18n="early.desc">Enter your invite code to get started</div>
+      <div style="display:flex;gap:8px;max-width:320px;margin:0 auto">
+        <input id="earlyAccessInput" type="text" class="fv-input border rounded-lg text-sm" style="flex:1;padding:8px 12px" data-i18n-placeholder="early.placeholder" placeholder="Enter invite code" />
+        <button id="earlyAccessBtn" type="button" class="px-4 py-2 rounded-lg font-semibold text-sm bg-emerald-600 hover:bg-emerald-500 transition" data-i18n="early.submit">Submit</button>
+      </div>
+      <div id="earlyAccessError" class="text-xs text-red-400 mt-2" style="display:none" data-i18n="early.invalid">Invalid invite code, please try again</div>
+    </div>
 
     <!-- Create Vest -->
 <div id="creatorPanel" class="fv-surface mt-6 rounded-2xl border p-6 space-y-4" style="display:none">
@@ -375,18 +404,36 @@
       Lock funds on-chain. Recipient can claim funds every 30 days.
     </p>
     <p class="fv-muted text-xs mt-1" data-i18n="creator.introNote">
-      Total funding: monthly amount × 3 periods · Vest starts in ~5s ·
-      Termination available after Period 2 and before Period 3 completes.
+      Total funding: amount × periods · Vest starts in ~5s · Cancel available after ~2 months.
     </p>
   </div>
 
   <!-- Step indicator -->
-  <div style="display:flex;align-items:center;gap:6px;margin-top:1rem;margin-bottom:1rem">
-    <span id="step1Dot" style="width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0"></span>
-    <span id="step1Label" style="font-size:14px;font-weight:600;white-space:nowrap">Approve USDC</span>
-    <span style="color:var(--fv-muted);font-size:18px;padding:0 32px;flex-shrink:0">→</span>
-    <span id="step2Dot" style="width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0"></span>
-    <span id="step2Label" style="font-size:14px;font-weight:600;white-space:nowrap">Create Vest</span>
+  <div style="display:flex;align-items:center;gap:4px;margin-top:1rem;margin-bottom:1rem">
+    <span id="step1Dot" style="width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0"></span>
+    <span id="step1Label" style="font-size:12px;font-weight:600;flex-shrink:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Approve USDC</span>
+    <span style="color:var(--fv-muted);font-size:14px;padding:0 4px;flex-shrink:0">→</span>
+    <span id="step2Dot" style="width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0"></span>
+    <span id="step2Label" style="font-size:12px;font-weight:600;flex-shrink:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Create Vest</span>
+  </div>
+
+  <!-- Plan selector -->
+  <div>
+    <label class="block text-sm fv-text mb-2" data-i18n="creator.planLabel">Payment Plan</label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
+      <button type="button" id="planBtnA"
+        class="text-left rounded-2xl border px-4 py-3 transition focus:outline-none"
+        style="border-color:#10b981;background:rgba(16,185,129,0.07)">
+        <div class="font-bold text-sm fv-text" data-i18n="creator.planA">Plan A</div>
+        <div class="text-xs fv-muted mt-0.5" data-i18n="creator.planADesc">3 × 30-day periods</div>
+      </button>
+      <button type="button" id="planBtnB"
+        class="text-left rounded-2xl border px-4 py-3 transition focus:outline-none"
+        style="border-color:var(--fv-border)">
+        <div class="font-bold text-sm fv-text" data-i18n="creator.planB">Plan B</div>
+        <div class="text-xs fv-muted mt-0.5" data-i18n="creator.planBDesc">6 × 14-day periods</div>
+      </button>
+    </div>
   </div>
 
   <!-- Monthly amount -->
@@ -399,14 +446,15 @@
     placeholder="e.g. 100"
     class="fv-input w-full rounded-2xl border px-5 py-4 text-lg outline-none focus:border-emerald-500"
   />
-  <div class="mt-1 text-xs fv-muted" data-i18n="creator.monthlyRules">
+  <div id="monthlyRulesHint" class="mt-1 text-xs fv-muted" data-i18n="creator.monthlyRules">
     Min 67 · Max 1,000 USDC &nbsp;·&nbsp; Total locked: min 200 / max 3,000 USDC
   </div>
   <div id="monthlyError" class="mt-1 text-xs text-rose-400 hidden"></div>
   <div class="mt-2 text-sm fv-muted">
-    <span data-i18n="creator.totalPrincipalLabel">Total principal (monthly × 3):</span> <span id="ownerTotal" class="font-mono fv-text">—</span> USDC
+    <span id="ownerTotalLabel" data-i18n="creator.totalPrincipalLabel">Total funding (Monthly × {periods}):</span> <span id="ownerTotal" class="font-mono fv-text">—</span> USDC
   </div>
    <div id="balanceError" class="mt-1 text-xs text-rose-400 hidden"></div>
+  <div id="tvlCapHint" class="mt-1 text-xs text-amber-500 hidden" aria-live="polite"></div>
 
 </div>
   <!-- Approve -->
@@ -425,6 +473,10 @@
     <span data-i18n="creator.beneficiaryLabel">Input Recipient Wallet Address</span>
     <span class="text-emerald-400 ml-1" data-i18n="creator.beneficiaryLabelNote">(Please confirm the recipient's address)</span>
   </label>
+  <div class="mb-2 inline-flex max-w-full items-start gap-2 rounded-xl border border-orange-400/50 bg-orange-500/15 px-4 py-3 text-sm font-semibold text-orange-200">
+    <span aria-hidden="true">⚠️</span>
+    <span>Do not use sanctioned or blocked USDC addresses!</span>
+  </div>
   <div class="flex gap-2">
     <input
       id="ownerBeneficiary"
@@ -443,6 +495,18 @@
 </div>
   <div id="beneficiaryError" class="mt-1 text-xs text-rose-400 hidden"></div>
 </div>
+<div class="mt-4">
+  <label class="block text-sm fv-text mb-2" data-i18n="creator.memoLabel">Memo (optional)</label>
+  <input
+    id="ownerMemo"
+    type="text"
+    data-i18n-placeholder="creator.memoPh"
+    placeholder="e.g. Q1 consulting fee"
+    maxlength="80"
+    autocomplete="off"
+    class="fv-input w-full rounded-2xl border px-5 py-4 text-base outline-none focus:border-emerald-500"
+  />
+</div>
   <!-- Create -->
   <button
     id="btnOwnerCreate"
@@ -455,7 +519,7 @@
    <div class="text-xs fv-muted mt-2" data-i18n="creator.startSoon">
 Vest will start in ~5 seconds
 </div>
-   <div class="text-xs text-emerald-400 mt-1" data-i18n="creator.releaseInterval">
+   <div id="releaseIntervalHint" class="text-xs text-emerald-400 mt-1" data-i18n="creator.releaseInterval">
 Releases every 30 days (fixed interval)
 </div>
 
@@ -535,17 +599,23 @@ Releases every 30 days (fixed interval)
 
 <!-- app modules (order matters) -->
 <script src="assets/js/i18n.js?v=20260325a"></script>
-<script src="assets/js/config.js"></script>
-<script src="assets/js/abi.js"></script>
+<script src="assets/js/config.js?v=20260429a"></script>
+<script src="assets/js/abi.js?v=20260406a"></script>
 <script src="assets/js/state.js"></script>
 <script src="assets/js/utils.js"></script>
-<script src="assets/js/ui.js?v=20260325a"></script>
-<script src="assets/js/wallet.js?v=20260325a"></script>
-<script src="assets/js/contracts.js"></script>
-<script src="assets/js/tx.js"></script>
-<script src="assets/js/flow.js?v=20260325a"></script>
+<script src="assets/js/ui.js?v=20260425a"></script>
+<script src="assets/js/wallet.js?v=20260429b"></script>
+<script src="assets/js/contracts.js?v=20260429b"></script>
+<script src="assets/js/tx.js?v=20260429c"></script>
+<script src="assets/js/flow.js?v=20260429b"></script>
 <script src="assets/js/early-access.js"></script>
-<script src="assets/js/app.js?v=20260325a"></script>
+<script src="assets/js/app.js?v=20260429b"></script>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    if (window.EARLY_ACCESS) EARLY_ACCESS.initEarlyAccess();
+  });
+</script>
 
 <script>
   (function () {

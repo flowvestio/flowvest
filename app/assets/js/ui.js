@@ -30,6 +30,13 @@
     `[${time}] ${msg}\n`;
 }
 
+  /** Keep the small heading above `#status` aligned with current locale (sender.html). */
+  function syncOperationStatusHeading() {
+    document.querySelectorAll('[data-i18n="status.label"]').forEach((node) => {
+      node.textContent = T("status.label");
+    });
+  }
+
   function showStatus(msg, type = "info", opts = {}) {
     const el = $("status");
     if (!el) return;
@@ -40,6 +47,41 @@
       el.textContent = String(msg ?? "");
     }
     el.dataset.type = type;
+    // If caller uses raw strings, clear any previous i18n binding.
+    if (!opts?.i18nKey) {
+      delete el.dataset.i18nKey;
+      delete el.dataset.i18nParams;
+    }
+    syncOperationStatusHeading();
+  }
+
+  function showStatusKey(key, type = "info", params = null, opts = {}) {
+    const el = $("status");
+    if (!el) return;
+    const k = String(key || "");
+    const p = params && typeof params === "object" ? params : null;
+    el.dataset.i18nKey = k;
+    try {
+      el.dataset.i18nParams = p ? JSON.stringify(p) : "";
+    } catch (_) {
+      el.dataset.i18nParams = "";
+    }
+    showStatus(T(k, p || undefined), type, { ...opts, i18nKey: k });
+  }
+
+  function refreshStatusI18n() {
+    const el = $("status");
+    if (!el) return;
+    const key = el.dataset.i18nKey;
+    if (!key) return;
+    let params = null;
+    try {
+      params = el.dataset.i18nParams ? JSON.parse(el.dataset.i18nParams) : null;
+    } catch (_) {
+      params = null;
+    }
+    const type = el.dataset.type || "info";
+    showStatus(T(key, params || undefined), type, { i18nKey: key });
   }
 
   function showError(msg) {
@@ -59,13 +101,39 @@
     const btn = $("btnWallet");
     if (!btn) return;
 
+    const badge = $("walletIdentityBadge");
+
     if (!STATE.account) {
       btn.textContent = T("wallet.connect");
+      if (badge) {
+        badge.textContent = "";
+        badge.classList.add("hidden");
+      }
       return;
     }
 
     btn.textContent = UTILS.shortAddr(STATE.account);
     btn.dataset.addr = String(STATE.account);
+
+    if (badge) {
+      let isEarly = false;
+      try {
+        isEarly = !!(
+          window.EARLY_ACCESS &&
+          typeof EARLY_ACCESS.checkAccess === "function" &&
+          EARLY_ACCESS.checkAccess()
+        );
+      } catch (_) {
+        isEarly = false;
+      }
+      if (isEarly) {
+        badge.textContent = T("wallet.earlyUser");
+        badge.classList.remove("hidden");
+      } else {
+        badge.textContent = "";
+        badge.classList.add("hidden");
+      }
+    }
   }
 
 function syncClaimButton(claimable) {
@@ -106,19 +174,29 @@ function updateClaimableUI(summary) {
   const rawVestCount = Number(summary?.beneficiary?.claimable_vests || 0);
   const S = window.STATE;
 
-  if (S && S.postClaimStaleGuardUntil && Date.now() >= S.postClaimStaleGuardUntil) {
+  const now = Date.now();
+  if (S && S.postClaimStaleGuardUntil && now >= S.postClaimStaleGuardUntil) {
     S.postClaimStaleGuardUntil = 0;
+    S.postClaimZeroSeenAt = 0;
   }
 
-  let guardActive = S && S.postClaimStaleGuardUntil && Date.now() < S.postClaimStaleGuardUntil;
-  if (guardActive && (rawClaimable <= 0 || rawVestCount <= 0)) {
-    S.postClaimStaleGuardUntil = 0;
-    guardActive = false;
+  let guardActive = S && S.postClaimStaleGuardUntil && now < S.postClaimStaleGuardUntil;
+  if (guardActive) {
+    if (rawClaimable <= 0 || rawVestCount <= 0) {
+      if (!S.postClaimZeroSeenAt) S.postClaimZeroSeenAt = now;
+      if (now - S.postClaimZeroSeenAt >= 8000) {
+        S.postClaimStaleGuardUntil = 0;
+        S.postClaimZeroSeenAt = 0;
+        guardActive = false;
+      }
+    } else {
+      S.postClaimZeroSeenAt = 0;
+    }
   }
 
-  const guardStill = S && S.postClaimStaleGuardUntil && Date.now() < S.postClaimStaleGuardUntil;
+  const guardStill = S && S.postClaimStaleGuardUntil && now < S.postClaimStaleGuardUntil;
   const scanLooksStaleAfterClaim =
-    !!(guardStill && rawClaimable > 0 && rawVestCount > 0);
+    !!guardStill;
 
   const claimable = scanLooksStaleAfterClaim ? 0 : rawClaimable;
   const vestCount = scanLooksStaleAfterClaim ? 0 : rawVestCount;
@@ -140,12 +218,45 @@ function updateClaimableUI(summary) {
   const nextHintEl = document.getElementById("claimNextHint");
   if (nextHintEl) {
     const nextTs = summary?.beneficiary?.next_payment_at;
+
+    // clear any existing countdown ticker
+    if (window._nextClaimTimer) {
+      clearInterval(window._nextClaimTimer);
+      window._nextClaimTimer = null;
+    }
+
     if (claimable <= 0 && nextTs) {
-      const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-      const d = new Date(nextTs * 1000);
-      const dateStr = `${months[d.getUTCMonth()]} ${d.getUTCDate()}`;
-      nextHintEl.textContent = T("claim.nextAvailable", { date: dateStr });
+      function renderNextHint() {
+        const secsLeft = nextTs - Math.floor(Date.now() / 1000);
+        if (secsLeft <= 0) {
+          // time reached — stop ticker and let next data refresh take over
+          if (window._nextClaimTimer) {
+            clearInterval(window._nextClaimTimer);
+            window._nextClaimTimer = null;
+          }
+          nextHintEl.textContent = T("claim.nextAvailable", { date: "now" });
+          return;
+        }
+        if (secsLeft < 86400) {
+          // countdown: HH:MM:SS
+          const h = String(Math.floor(secsLeft / 3600)).padStart(2, "0");
+          const m = String(Math.floor((secsLeft % 3600) / 60)).padStart(2, "0");
+          const s = String(secsLeft % 60).padStart(2, "0");
+          nextHintEl.textContent = `Next claim available in ${h}:${m}:${s}`;
+        } else {
+          const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+          const d = new Date(nextTs * 1000);
+          const dateStr = `${months[d.getUTCMonth()]} ${d.getUTCDate()}`;
+          nextHintEl.textContent = T("claim.nextAvailable", { date: dateStr });
+        }
+      }
+      renderNextHint();
       nextHintEl.classList.remove("hidden");
+      // start live ticker only when within 24 h
+      const secsLeft = nextTs - Math.floor(Date.now() / 1000);
+      if (secsLeft < 86400) {
+        window._nextClaimTimer = setInterval(renderNextHint, 1000);
+      }
     } else {
       nextHintEl.textContent = "";
       nextHintEl.classList.add("hidden");
@@ -176,11 +287,11 @@ function updateClaimableUI(summary) {
     if (!el) return;
 
     if (!STATE.account) {
-      el.href = "https://scan.flowvest.io";
+      el.href = C.SCAN_BASE;
       return;
     }
 
-    el.href = `https://scan.flowvest.io/address.html?addr=${STATE.account}`;
+    el.href = `${C.SCAN_BASE}/address.html?addr=${STATE.account}`;
   }
 
   function updateAccountInfo() {
@@ -202,13 +313,27 @@ function updateClaimableUI(summary) {
   function setConnected() {
     updateWalletBtn();
     updateAccountInfo();
+    // WalletConnect can fire accountsChanged([]) then a real address; an early
+    // setDisconnected() leaves "Disconnected" in #status while the header
+    // already shows the address. Only replace that stale disconnected line.
+    const st = $("status");
+    if (
+      STATE.account &&
+      st &&
+      st.dataset.type !== "error" &&
+      st.dataset.i18nKey === "status.disconnected"
+    ) {
+      showStatusKey("status.ready", "info");
+    }
   }
 
   function setDisconnected() {
     updateWalletBtn();
     updateAccountInfo();
     closeWalletMenu();
-    showInfo(T("status.disconnected"));
+    if (!STATE.account) {
+      showStatusKey("status.disconnected", "info");
+    }
     const btnClaim = $("btnClaim");
     if (btnClaim) {
       btnClaim.disabled = true;
@@ -263,10 +388,17 @@ function updateClaimableUI(summary) {
 
 }
 
+  let _walletMenuTimer = null;
+
   function openWalletMenu() {
     const menu = $("walletMenu");
     if (!menu) return;
     menu.classList.remove("hidden");
+    if (_walletMenuTimer) clearTimeout(_walletMenuTimer);
+    _walletMenuTimer = setTimeout(() => {
+      menu.classList.add("hidden");
+      _walletMenuTimer = null;
+    }, 5000);
   }
 
   function safeError(err) {
@@ -274,12 +406,26 @@ function updateClaimableUI(summary) {
   const raw = window.UTILS ? UTILS.safeError(err) : String(err?.message || err || "");
   const msg = raw === "Unknown error" ? "" : raw;
 
+  // WalletConnect / session lifecycle
+  if (msg.toLowerCase().includes("reject session")) {
+    return T("ui.rejectSession");
+  }
+
+  // Internal app state / init order
+  if (msg.includes("CONTRACTS.init: signer missing")) {
+    return T("ui.signerMissing");
+  }
+
   if (msg.toLowerCase().includes("user reject") || msg.toLowerCase().includes("user denied")) {
     return T("ui.userRejected");
   }
 
   if (msg.toLowerCase().includes("transaction failed") || msg.toLowerCase().includes("transaction was not created")) {
     return T("ui.txFailed");
+  }
+
+  if (msg.toLowerCase().includes("rate limit")) {
+    return "RPC is rate limited. Please wait 30-60 seconds and try again.";
   }
 
   if (msg.includes("NOT_OWNER")) {
@@ -354,6 +500,7 @@ function updateClaimableUI(summary) {
     const menu = $("walletMenu");
     if (!menu) return;
     menu.classList.add("hidden");
+    if (_walletMenuTimer) { clearTimeout(_walletMenuTimer); _walletMenuTimer = null; }
   }
 
   function toggleWalletMenu() {
@@ -425,9 +572,11 @@ document.addEventListener("click", async (e) => {
     setText,
     escapeHtml,
     showStatus,
+    showStatusKey,
     showError,
     showSuccess,
     showInfo,
+    refreshStatusI18n,
     log,
     updateWalletBtn,
     updateScanBtn,

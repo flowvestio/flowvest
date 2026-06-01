@@ -28,6 +28,10 @@
 
     // After a successful claim, Scan API can lag ~few seconds still showing old claimable.
     // Until it catches up (or this timestamp passes), UI shows "syncing" instead of stale amounts.
-    postClaimStaleGuardUntil: 0
+    postClaimStaleGuardUntil: 0,
+    postClaimZeroSeenAt: 0,
+
+    /** Protocol TVL (USDC) from scan API prefetch or `loadStats`; used for sender TVL-cap hint. */
+    protocolTvlNum: null
   };
 })();

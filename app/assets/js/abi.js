@@ -13,11 +13,14 @@
     FLOW: [
       "function vestCount() view returns (uint256)",
       "function totalPrincipal() view returns (uint256)",
-      "function vests(uint256) view returns (address owner,address beneficiary,uint256 startAt,uint256 monthly,uint256 principal,uint256 released,bool terminated)",
+      "function tvlCap() view returns (uint256)",
+      "function maxPrincipal() view returns (uint256)",
+      "function vests(uint256) view returns (address owner,address beneficiary,uint256 startAt,uint256 periodAmount,uint256 principal,uint256 releasedAmount,bool terminated,uint8 plan)",
       "function dueAmount(uint256) view returns (uint256)",
-      "function createVest(address beneficiary,uint256 startAt,uint256 monthly)",
-      "event VestCreated(uint256 indexed vestId, address indexed owner, address indexed beneficiary)",
+      "function createVest(address beneficiary,uint256 startAt,uint256 periodAmount,uint8 plan)",
+      "event VestCreated(uint256 indexed id,address indexed owner_,address indexed beneficiary,uint256 startAt,uint256 periodAmount,uint256 principal,uint8 plan)",
       "function release(uint256 vestId)",
+      "function batchRelease(uint256[] ids) returns (uint256 processedCount,uint256 totalAmount)",
       "function terminate(uint256 vestId)"
     ]
 

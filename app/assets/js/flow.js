@@ -1,10 +1,29 @@
 (function () {
 
+  function planConfig(planId) {
+    if (Number(planId) === Number(C.PLAN_B)) {
+      return { period: Number(C.PERIOD_B), periods: Number(C.PERIODS_B) };
+    }
+    return { period: Number(C.PERIOD_A), periods: Number(C.PERIODS_A) };
+  }
+
   let cachedMyVestIds = null;
   let cachedVestCount = 0;
   let cachedScanFrom = null;
   let claimableComputeToken = 0;
   let _nextPaymentCache = { at: 0, value: null, vestIds: '' };
+  let _statsCache = { at: 0, value: null };
+
+  function isRateLimitError(err) {
+    const msg = String(err?.message || err?.reason || err || "");
+    return err?.status === 429 || err?.response?.status === 429 || msg.includes("429") || msg.includes("Too Many Requests");
+  }
+
+  function noteRateLimit(err) {
+    if (!isRateLimitError(err)) return false;
+    STATE.rpcBackoffUntil = Date.now() + 30000;
+    return true;
+  }
 
   function flowRead() {
     return STATE.readFlow || STATE.flow;
@@ -59,8 +78,6 @@ async function computeNextPaymentAt(vestIds) {
     _nextPaymentCache = { at: Date.now(), value: null, vestIds: key };
     return null;
   }
-  const period = Number(C.PERIOD || C.PERIOD_SECONDS || 2592000);
-  const total = Number(C.TOTAL || 3);
   const now = Math.floor(Date.now() / 1000);
   let earliest = null;
   const vestResults = await Promise.allSettled(
@@ -71,8 +88,9 @@ async function computeNextPaymentAt(vestIds) {
     try {
       const startAt = Number(result.value.startAt || 0);
       if (!startAt) continue;
-      for (let i = 1; i <= total; i++) {
-        const releaseAt = startAt + period * i;
+      const cfg = planConfig(result.value.plan);
+      for (let i = 1; i <= cfg.periods; i++) {
+        const releaseAt = startAt + cfg.period * i;
         if (releaseAt > now) {
           if (earliest === null || releaseAt < earliest) earliest = releaseAt;
           break;
@@ -91,6 +109,11 @@ function formatUtcDatetime(ts) {
   const d = new Date(ts * 1000);
   const p = n => String(n).padStart(2, '0');
   return `${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())} UTC`;
+}
+
+function isRateLimitError(err) {
+  const msg = UTILS.safeError(err).toLowerCase();
+  return msg.includes("rate limit") || msg.includes("too many requests") || msg.includes("429");
 }
 
 async function prepareClaimableIds({ vestsHint = 0 } = {}) {
@@ -123,7 +146,7 @@ async function prepareClaimableIds({ vestsHint = 0 } = {}) {
 
   STATE.claimablePreparePromise = (async () => {
     try {
-      const url = `https://scan.flowvest.io/api/beneficiary-vests?addr=${STATE.account}&t=${Date.now()}`;
+      const url = `${C.SCAN_BASE}/api/beneficiary-vests?addr=${STATE.account}&t=${Date.now()}`;
       const r = await fetch(url, { cache: "no-store" });
       if (!r.ok) throw new Error(`beneficiary-vests ${r.status}`);
 
@@ -164,7 +187,7 @@ async function refreshView() {
   try {
 
     const r = await fetch(
-    `https://scan.flowvest.io/api/address/${STATE.account}/summary?t=${Date.now()}`,
+    `${C.SCAN_BASE}/api/address/${STATE.account}/summary?t=${Date.now()}`,
   { cache: "no-store" }
     );
 
@@ -246,6 +269,12 @@ async function refreshView() {
     try {
 
       if (!STATE.flow || !STATE.usdc) return empty;
+      if (STATE.rpcBackoffUntil && Date.now() < STATE.rpcBackoffUntil) {
+        return _statsCache.value || empty;
+      }
+      if (_statsCache.value && Date.now() - _statsCache.at < 30000) {
+        return _statsCache.value;
+      }
 
       const stats = { ...empty };
 
@@ -256,17 +285,17 @@ async function refreshView() {
       ]);
 
       if (tvlResult.status === "fulfilled") stats.tvl = tvlResult.value;
-      else console.warn("totalPrincipal() failed", tvlResult.reason);
+      else if (!noteRateLimit(tvlResult.reason)) console.warn("totalPrincipal() failed", tvlResult.reason);
 
       let count = 0;
       if (countResult.status === "fulfilled") {
         count = Number(countResult.value);
         stats.vestCount = count;
-      } else console.warn("vestCount() failed", countResult.reason);
+      } else if (!noteRateLimit(countResult.reason)) console.warn("vestCount() failed", countResult.reason);
 
       if (balanceResult.status === "fulfilled" && balanceResult.value !== null) {
         stats.balance = balanceResult.value;
-      } else if (balanceResult.status === "rejected") {
+      } else if (balanceResult.status === "rejected" && !noteRateLimit(balanceResult.reason)) {
         console.warn("balanceOf failed", balanceResult.reason);
       }
 
@@ -282,20 +311,21 @@ async function refreshView() {
       // via the scan API + prepareClaimableIds. Keep KPI stats lightweight
       // so Protocol TVL updates fast after connect.
 
+      _statsCache = { at: Date.now(), value: stats };
       return stats;
 
     } catch (err) {
 
-      console.error("[FLOW] loadStats error:", err);
+      if (!noteRateLimit(err)) console.error("[FLOW] loadStats error:", err);
 
-      return empty;
+      return _statsCache.value || empty;
 
     }
 
   }
 
-//createVest 
-    async function createVest(monthlyInput, beneficiaryInput) {
+//createVest
+    async function createVest(monthlyInput, beneficiaryInput, planInput) {
   if (!STATE.account) throw new Error("Wallet not connected");
   if (!STATE.flow) throw new Error("Contract not initialized");
 
@@ -305,6 +335,7 @@ async function refreshView() {
 
   const monthly = String(monthlyInput || "").trim();
   const beneficiary = String(beneficiaryInput || "").trim();
+  const plan = Number(planInput || C.PLAN_A);
 
   if (!monthly) throw new Error("Monthly amount required");
   if (!beneficiary) throw new Error("Beneficiary required");
@@ -319,43 +350,68 @@ async function refreshView() {
     throw new Error("Invalid monthly amount");
   }
 
-  const totalAmount = monthlyNum * 3;
+  const cfg = planConfig(plan);
+  const totalAmount = monthlyNum * cfg.periods;
 
   if (totalAmount < 200) {
-    throw new Error("Minimum vest is 200 USDC total (monthly x 3)");
+    throw new Error(`Minimum vest is 200 USDC total (monthly x ${cfg.periods})`);
   }
 
-  if (totalAmount > 10000) {
-    throw new Error("Maximum vest is 10,000 USDC total (monthly x 3)");
+  const maxPrincipal = Number(C.MAX_PRINCIPAL_USDC || 0) || 10000;
+  if (totalAmount > maxPrincipal) {
+    throw new Error(`Maximum vest is ${maxPrincipal.toLocaleString()} USDC total (monthly x ${cfg.periods})`);
   }
 
-  // TVL Cap check + vestCount in parallel
-  const [currentTvl, beforeCount] = await Promise.all([
-    flowRead().totalPrincipal(),
+  let beforeCount = null;
+  let currentTvlNum = Number(STATE.protocolTvlNum);
+  if (!Number.isFinite(currentTvlNum) || currentTvlNum < 0) {
+    currentTvlNum = null;
+  }
+
+  const [currentTvlResult, beforeCountResult] = await Promise.allSettled([
+    currentTvlNum == null ? flowRead().totalPrincipal() : Promise.resolve(null),
     flowRead().vestCount(),
   ]);
-  const currentTvlNum = Number(ethers.utils.formatUnits(currentTvl, C.DECIMALS_USDC));
+
+  if (currentTvlResult.status === "fulfilled" && currentTvlResult.value != null) {
+    currentTvlNum = Number(ethers.utils.formatUnits(currentTvlResult.value, C.DECIMALS_USDC));
+  } else if (currentTvlResult.status === "rejected") {
+    console.warn("[FLOW] createVest TVL precheck skipped", currentTvlResult.reason);
+  }
+
+  if (beforeCountResult.status === "fulfilled") {
+    beforeCount = beforeCountResult.value;
+  } else {
+    console.warn("[FLOW] createVest vestCount precheck skipped", beforeCountResult.reason);
+  }
 
   const tvlCap = Number(C.TVL_CAP_USDC || 0) || 0;
-  if (tvlCap > 0 && currentTvlNum + totalAmount > tvlCap) {
+  if (tvlCap > 0 && currentTvlNum != null && currentTvlNum + totalAmount > tvlCap) {
     throw new Error(
-      `TVL Cap exceeded: current TVL is ${currentTvlNum.toFixed(2)} USDC, cap is ${tvlCap} USDC`
+      I18N.t("flow.tvlCapExceeded", { current: currentTvlNum.toFixed(2), cap: tvlCap })
     );
   }
 
   const monthlyAmount = UTILS.parseAmount(monthly, C.DECIMALS_USDC);
   const startAt = Math.floor(Date.now() / 1000) + 60;
   try {
-    await STATE.flow.callStatic.createVest(beneficiary, startAt, monthlyAmount);
+    const flowForSimulation = STATE.readFlow || STATE.flow;
+    await flowForSimulation.callStatic.createVest(beneficiary, startAt, monthlyAmount, plan, {
+      from: STATE.account
+    });
   } catch (simErr) {
-    const reason = UTILS.safeError(simErr);
-    throw new Error(
-      reason !== "Unknown error" ? reason : I18N.t("ui.unpredictableGas")
-    );
+    if (isRateLimitError(simErr)) {
+      console.warn("[FLOW] createVest simulation skipped due to rate limit", simErr);
+    } else {
+      const reason = UTILS.safeError(simErr);
+      throw new Error(
+        reason !== "Unknown error" ? reason : I18N.t("ui.unpredictableGas")
+      );
+    }
   }
 
   const receipt = await TX.send(
-    () => STATE.flow.createVest(beneficiary, startAt, monthlyAmount),
+    () => TX.sendRaw(() => STATE.flow.populateTransaction.createVest(beneficiary, startAt, monthlyAmount, plan)),
     {
       pendingText: I18N.t("flow.pendingCreate"),
       successText: I18N.t("flow.successCreate"),
@@ -391,7 +447,7 @@ async function refreshView() {
     console.warn("Failed to parse vestId", err);
   }
 
-  if (vestId === null) {
+  if (vestId === null && beforeCount !== null) {
     try {
     let afterCount = await flowRead().vestCount();
 
@@ -416,12 +472,13 @@ async function refreshView() {
   if (vestId !== null) {
     const line1 = I18N.t("creator.vestCreated", { id: vestId });
     const line2 = I18N.t("creator.vestCreatedHint");
-    const scanUrl = `https://scan.flowvest.io/vest.html?id=${vestId}`;
+    const scanUrl = `${C.SCAN_BASE}/vest.html?id=${vestId}`;
     const line3 = `<a href="${scanUrl}" target="_blank" class="underline text-green-400">${I18N.t("creator.vestCreatedScan")}</a>`;
     if (window.UI?.showStatus) UI.showStatus(`${line1}<br>${line2}<br>${line3}`, "success", { html: true });
   } else {
     if (window.UI?.showSuccess) UI.showSuccess(I18N.t("flow.successCreate"));
   }
+  return vestId;
 }
 
 async function claim() {
@@ -450,18 +507,35 @@ async function claim() {
     );
   }
 
-  for (let i = 0; i < claimableIds.length; i++) {
-    const id = claimableIds[i];
-
+  if (claimableIds.length === 1) {
+    const id = claimableIds[0];
     await TX.send(
-      () => STATE.flow.release(id),
+      () => TX.sendRaw(() => STATE.flow.populateTransaction.release(id)),
       {
-        pendingText: I18N.t("flow.claimingVest", {
-          id,
-          current: i + 1,
-          total: claimableIds.length
-        }),
+        pendingText: I18N.t("flow.claimingVest", { id, current: 1, total: 1 }),
         successText: I18N.t("flow.vestClaimed", { id }),
+        claimStatus: true
+      }
+    );
+  } else {
+    // Pre-flight simulation — catches reverts before spending gas
+    try {
+      await STATE.flow.callStatic.batchRelease(claimableIds);
+    } catch (simErr) {
+      const reason = UTILS.safeError(simErr);
+      throw new Error(reason !== "Unknown error" ? reason : I18N.t("ui.rpcError"));
+    }
+    // OKX wallet often underestimates gas for array-type calls — add 30% buffer
+    let gasOpts = {};
+    try {
+      const gasEst = await STATE.flow.estimateGas.batchRelease(claimableIds);
+      gasOpts = { gasLimit: gasEst.mul(130).div(100) };
+    } catch (_) {}
+    await TX.send(
+      () => TX.sendRaw(() => STATE.flow.populateTransaction.batchRelease(claimableIds, gasOpts)),
+      {
+        pendingText: I18N.t("flow.claimingBatch", { n: claimableIds.length }),
+        successText: I18N.t("flow.batchClaimed", { n: claimableIds.length }),
         claimStatus: true
       }
     );
@@ -475,22 +549,45 @@ async function claim() {
   STATE.claimablePreparePromise = null;
 
   // Scan indexer may still return the pre-claim total for a few seconds — avoid confusing UI.
-  STATE.postClaimStaleGuardUntil = Date.now() + 30000;
+  STATE.postClaimStaleGuardUntil = Date.now() + 60000;
+  STATE.postClaimZeroSeenAt = 0;
 
   // Immediately zero out UI — don't wait for API response.
   if (window.UI?.setClaimedState) UI.setClaimedState();
 
+  // Fire-and-forget: wallet RPC already sees the confirmed state.
+  // Keep the post-claim guard until Scan API catches up; otherwise a stale API
+  // response can re-display the old claimable amount for several seconds.
+  const _chainCheckId = claimableIds[0];
+  (async () => {
+    try {
+      const due = await flowRead().dueAmount(_chainCheckId);
+      if (Number(due) === 0) {
+        if (window.UI?.setClaimedState) UI.setClaimedState();
+        if (window._refreshMyVests) window._refreshMyVests();
+      }
+    } catch (_) {}
+  })();
+
   await refreshView();
 
-  // Burst-poll every 500ms until the indexer syncs and guard clears (max 15s).
+  // Burst-poll refreshView every 2s until guard clears (indexer synced), max 60s.
   const _burstStart = Date.now();
   const _burstTimer = setInterval(async () => {
-    if (!STATE.postClaimStaleGuardUntil || Date.now() - _burstStart > 15000) {
+    if (!STATE.postClaimStaleGuardUntil || Date.now() - _burstStart > 60000) {
       clearInterval(_burstTimer);
       return;
     }
     try { await refreshView(); } catch (_) {}
-  }, 500);
+  }, 2000);
+
+  // Independently poll MyVests every 2s for 15s so Active Vests list updates
+  // promptly regardless of when postClaimStaleGuardUntil is cleared.
+  const _myVestsPollEnd = Date.now() + 15000;
+  const _myVestsTimer = setInterval(() => {
+    if (Date.now() > _myVestsPollEnd) { clearInterval(_myVestsTimer); return; }
+    if (window._refreshMyVests) window._refreshMyVests();
+  }, 2000);
 }
 
 async function canTerminateVest(vestId) {
@@ -519,7 +616,7 @@ async function canTerminateVest(vestId) {
     ethers.utils.formatUnits(vest.principal, C.DECIMALS_USDC)
   );
   const released = Number(
-    ethers.utils.formatUnits(vest.released, C.DECIMALS_USDC)
+    ethers.utils.formatUnits(vest.releasedAmount, C.DECIMALS_USDC)
   );
 
   if (released >= principal) {
@@ -527,15 +624,15 @@ async function canTerminateVest(vestId) {
   }
 
   const startAt = Number(vest.startAt || 0);
-  const period = Number(C.PERIOD_SECONDS || C.PERIOD || 2592000);
+  const cfg = planConfig(vest.plan);
   const now = Math.floor(Date.now() / 1000);
 
-  const terminateAt = startAt + (period * 2);
-  const completeAt = startAt + (period * 3);
-
+  const minTerminatePeriods = Number(vest.plan) === Number(C.PLAN_B) ? C.MIN_TERMINATE_PERIODS_B : C.MIN_TERMINATE_PERIODS_A;
+  const terminateAt = startAt + (cfg.period * minTerminatePeriods);
+  const completeAt = startAt + (cfg.period * cfg.periods);
 
   if (now < terminateAt) {
-    return { ok: false, reason: "Terminate available after second period" };
+    return { ok: false, reason: window.I18N ? I18N.t("ui.terminateAfterM2") : "Terminate available after second period" };
   }
   if (now >= completeAt) {
     return { ok: false, reason: window.I18N ? I18N.t("ui.terminateWindowClosed") : "Terminate window closed" };
@@ -588,7 +685,7 @@ async function getTerminateStatus(vestId) {
     ethers.utils.formatUnits(vest.principal, C.DECIMALS_USDC)
   );
   const released = Number(
-    ethers.utils.formatUnits(vest.released, C.DECIMALS_USDC)
+    ethers.utils.formatUnits(vest.releasedAmount, C.DECIMALS_USDC)
   );
 
   if (released >= principal) {
@@ -596,9 +693,10 @@ async function getTerminateStatus(vestId) {
   }
 
   const startAt = Number(vest.startAt || 0);
-  const period = Number(C.PERIOD_SECONDS || C.PERIOD || 2592000);
+  const cfg = planConfig(vest.plan);
   const now = Math.floor(Date.now() / 1000);
-  const terminateAt = startAt + (period * 2);
+  const minTerminatePeriods = Number(vest.plan) === Number(C.PLAN_B) ? C.MIN_TERMINATE_PERIODS_B : C.MIN_TERMINATE_PERIODS_A;
+  const terminateAt = startAt + (cfg.period * minTerminatePeriods);
 
   if (now < terminateAt) {
     return {
@@ -635,7 +733,7 @@ async function terminateVest(vestId) {
   }
 
   const receipt = await TX.send(
-    () => STATE.flow.terminate(id),
+    () => TX.sendRaw(() => STATE.flow.populateTransaction.terminate(id)),
     {
       pendingText: I18N.t("flow.pendingTerminate"),
       successText: I18N.t("flow.successTerminate", { id })

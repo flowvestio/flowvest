@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Flowvest Vest</title>
+  <meta name="description" content="Flowvest Vest: send scheduled USDC payments or claim received vests." />
+  <link rel="icon" type="image/png" href="/assets/logo/flowvest-logo.png" />
+  <link rel="apple-touch-icon" href="/assets/logo/flowvest-logo.png" />
+  <link rel="stylesheet" href="assets/css/tailwind.min.css?v=20260320a" />
+  <style>
+    :root {
+      --bg: #fbfaf6;
+      --text: #101010;
+      --muted: #68625a;
+      --surface: #fffefb;
+      --line: #e7e0d3;
+      --green: #159f72;
+      --amber: #c97d12;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      padding: 24px;
+    }
+    .page {
+      width: min(100%, 760px);
+      margin: 0 auto;
+    }
+    .panel {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--surface);
+      padding: 34px;
+      box-shadow: 0 18px 60px rgba(16, 16, 16, .06);
+    }
+    .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 34px;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: inherit;
+      text-decoration: none;
+      min-width: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .brand img {
+      width: 40px;
+      height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      flex: 0 0 auto;
+    }
+    .brand-name {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text);
+      font-size: 20px;
+      font-weight: 850;
+      letter-spacing: 0;
+    }
+    .version {
+      border: 1px solid rgba(21, 159, 114, .34);
+      border-radius: 6px;
+      background: rgba(21, 159, 114, .08);
+      color: var(--green);
+      padding: 2px 8px;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .brand-sub {
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(32px, 6vw, 48px);
+      line-height: 1.04;
+      letter-spacing: 0;
+      font-weight: 850;
+    }
+    p {
+      color: #3f3b37;
+      font-size: 19px;
+      line-height: 1.45;
+      margin: 14px 0 0;
+    }
+    .actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 34px;
+    }
+    a.action {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 22px;
+      color: inherit;
+      text-decoration: none;
+      transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+    }
+    a.action:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 14px 38px rgba(16, 16, 16, .07);
+    }
+    .sender:hover { border-color: rgba(201, 125, 18, .55); }
+    .recipient:hover { border-color: rgba(21, 159, 114, .55); }
+    .label {
+      font-size: 24px;
+      font-weight: 820;
+      margin-bottom: 8px;
+    }
+    .hint {
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.45;
+    }
+    .button {
+      margin-top: 20px;
+      border-radius: 8px;
+      color: white;
+      text-align: center;
+      padding: 13px 16px;
+      font-weight: 800;
+    }
+    .sender .button { background: var(--amber); }
+    .recipient .button { background: var(--green); }
+    .section-title {
+      margin: 38px 0 12px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .04em;
+    }
+    .activity-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .metric,
+    .lookup,
+    .recent {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      padding: 20px;
+    }
+    .metric-label {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .metric-value {
+      margin-top: 10px;
+      font-size: 28px;
+      line-height: 1;
+      font-weight: 850;
+    }
+    .metric-sub {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .lookup-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .lookup input {
+      min-width: 0;
+      flex: 1;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text);
+      padding: 13px 16px;
+      outline: none;
+      font: inherit;
+    }
+    .lookup button {
+      border: 0;
+      border-radius: 8px;
+      background: var(--green);
+      color: white;
+      padding: 0 18px;
+      font-weight: 850;
+      cursor: pointer;
+    }
+    .hint-line {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .recent-list {
+      display: grid;
+      gap: 12px;
+      font-size: 14px;
+      font-weight: 650;
+    }
+    .recent-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 12px;
+    }
+    .badge {
+      border: 1px solid rgba(201, 125, 18, .48);
+      color: #8b5b10;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 750;
+    }
+    .social {
+      display: flex;
+      justify-content: center;
+      gap: 18px;
+      margin-top: 28px;
+      color: var(--muted);
+    }
+    .social a {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      color: inherit;
+      text-decoration: none;
+    }
+    .social a:hover { color: var(--text); }
+    .social svg { width: 20px; height: 20px; display: block; }
+    .support {
+      margin: 12px 0 0;
+      color: var(--muted);
+      text-align: center;
+      font-size: 13px;
+    }
+    .support a { color: var(--muted); }
+    .copy {
+      margin: 8px 0 4px;
+      color: var(--muted);
+      text-align: center;
+      font-size: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    @media (max-width: 640px) {
+      .panel { padding: 26px; }
+      .actions { grid-template-columns: 1fr; }
+      .activity-grid { grid-template-columns: 1fr; }
+      .lookup-row { flex-direction: column; }
+      .lookup button { padding: 13px 18px; }
+      .top { font-size: 13px; }
+      .brand-name { font-size: 18px; }
+      .brand-sub { font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+  <main class="panel">
+    <div class="top">
+      <a href="/" class="brand">
+        <img src="/assets/logo/flowvest-logo.png" alt="Flowvest" />
+        <div>
+          <div class="brand-name">
+            <span>Flowvest</span>
+            <span class="version">V1.1</span>
+          </div>
+          <div class="brand-sub">app.flowvest.io</div>
+        </div>
+      </a>
+      <span>/vest</span>
+    </div>
+    <h1>Vest USDC to another wallet.</h1>
+    <p>Use Sender to create a scheduled payment. Use Recipient to check and claim funds released to your wallet.</p>
+    <section class="actions" aria-label="Vest roles">
+      <a class="action sender" href="/sender.html">
+        <div class="label">Sender</div>
+        <div class="hint">Create and manage scheduled USDC payments to another wallet.</div>
+        <div class="button">Open Sender →</div>
+      </a>
+      <a class="action recipient" href="/recipient.html">
+        <div class="label">Recipient</div>
+        <div class="hint">Connect or search your wallet to claim available vested funds.</div>
+        <div class="button">Open Recipient →</div>
+      </a>
+    </section>
+  </main>
+  <section aria-label="Flowvest Activity">
+    <div class="section-title">Flowvest Activity</div>
+    <div class="activity-grid">
+      <div class="metric">
+        <div class="metric-label">Locked Funds · USDC</div>
+        <div id="kpiTVL" class="metric-value">—</div>
+        <div id="kpiUsageSub" class="metric-sub">—</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Released Funds · USDC</div>
+        <div id="kpiReleased" class="metric-value" style="color:var(--green)">—</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Active Vests</div>
+        <div id="kpiActive" class="metric-value">—</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Total Vests</div>
+        <div id="kpiTotal" class="metric-value">—</div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-label="Quick Lookup">
+    <div class="section-title">Quick Lookup</div>
+    <div class="lookup">
+      <div class="hint-line" style="margin-top:0">Enter a vest ID or address to jump directly to details.</div>
+      <div class="lookup-row">
+        <input id="quickLookupInput" type="text" placeholder="Search by vest ID or wallet address" />
+        <button id="quickLookupBtn" type="button">Go</button>
+      </div>
+      <div id="quickLookupHint" class="hint-line">Example: 41 or 0x1234...abcd</div>
+    </div>
+  </section>
+
+  <section aria-label="Recent Activity">
+    <div class="section-title">Recent Activity</div>
+    <div class="recent">
+      <div id="recentActivity" class="recent-list">
+        <div class="hint-line" style="margin-top:0">Loading recent activity...</div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="social">
+      <a href="https://x.com/flowvestio" target="_blank" rel="noopener" aria-label="X">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.733-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+      </a>
+      <a href="https://github.com/flowvestio/flowvest" target="_blank" rel="noopener" aria-label="GitHub">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
+      </a>
+      <a href="https://t.me/+eHBjejs08rBiYTU1" target="_blank" rel="noopener" aria-label="Telegram">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+      </a>
+    </div>
+    <div class="support">Email: <a href="mailto:support@flowvest.io">support@flowvest.io</a></div>
+    <div class="copy">© 2026 Flowvest · Built on Base · USDC</div>
+  </footer>
+  </div>
+
+  <script>
+    (function () {
+      const fmt = (n) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const set = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+      };
+
+      fetch("https://scan.flowvest.io/api/stats?t=" + Date.now(), { cache: "no-store" })
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(data => {
+          const tvl = Number(data.tvl || 0);
+          const tvlCap = Number(data.tvl_cap || 0);
+          const released = Number(
+            data.claimed_total ??
+            data.total_claimed ??
+            data.released_total ??
+            data.total_released ??
+            data.claimed ??
+            data.released ??
+            0
+          );
+          const usage = tvl > 0 && tvlCap > 0 ? (tvl / tvlCap * 100).toFixed(2) + "% of capacity used" : "Capacity unavailable";
+          set("kpiTVL", fmt(tvl));
+          set("kpiReleased", fmt(released));
+          set("kpiActive", String(Number(data.active || 0)));
+          set("kpiTotal", String(Number(data.total || 0)));
+          set("kpiUsageSub", usage);
+        })
+        .catch(() => {});
+    })();
+  </script>
+
+  <script>
+    (function () {
+      const input = document.getElementById("quickLookupInput");
+      const btn = document.getElementById("quickLookupBtn");
+      const hint = document.getElementById("quickLookupHint");
+      if (!input || !btn) return;
+
+      function setHint(msg, isError) {
+        if (!hint) return;
+        hint.textContent = msg;
+        hint.style.color = isError ? "#f87171" : "";
+      }
+
+      function goLookup() {
+        const q = String(input.value || "").trim();
+        if (!q) return setHint("Enter a vest ID or address.", true);
+        if (/^\d+$/.test(q)) {
+          location.href = `https://scan.flowvest.io/vest.html?id=${q}`;
+          return;
+        }
+        if (/^0x[a-fA-F0-9]{40}$/.test(q)) {
+          location.href = `https://scan.flowvest.io/address.html?addr=${q}`;
+          return;
+        }
+        setHint("Invalid input. Use a vest ID or 0x address.", true);
+      }
+
+      btn.addEventListener("click", goLookup);
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") goLookup();
+      });
+    })();
+  </script>
+
+  <script>
+    (function () {
+      const box = document.getElementById("recentActivity");
+      if (!box) return;
+
+      fetch("https://scan.flowvest.io/api/activity?limit=5&t=" + Date.now(), { cache: "no-store" })
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(data => {
+          const rows = Array.isArray(data) ? data : (data.data || []);
+          if (!Array.isArray(rows) || rows.length === 0) {
+            box.innerHTML = `<div class="hint-line" style="margin-top:0">No recent activity.</div>`;
+            return;
+          }
+          box.innerHTML = rows.map(item => {
+            const amount = Number(item.amount || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const type = String(item.type || item.event_type || "");
+            const isClaimed = type === "claimed";
+            const text = isClaimed
+              ? `Vest #${item.vest_id} claimed · ${amount} USDC`
+              : `Vest #${item.vest_id} created · ${amount} USDC`;
+            const badge = isClaimed ? "Claimed" : "Created";
+            const badgeStyle = isClaimed
+              ? `style="border-color:rgba(21,159,114,.45);color:#087f5b;background:rgba(21,159,114,.08)"`
+              : "";
+            return `<div class="recent-row"><div>${text}</div><span class="badge" ${badgeStyle}>${badge}</span></div>`;
+          }).join("");
+        })
+        .catch(() => {
+          box.innerHTML = `<div class="hint-line" style="margin-top:0">Unable to load recent activity.</div>`;
+        });
+    })();
+  </script>
+</body>
+</html>

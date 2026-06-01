@@ -1,12 +1,12 @@
 # Flowvest
+> Locked by code. Not by promises.
 
 ![Status](https://img.shields.io/badge/status-public%20beta-blue)
 ![Network](https://img.shields.io/badge/network-Base-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-**Programmable stablecoin vesting on-chain.**
-
-Save for yourself. Vest for others.
+**Save for yourself. Vest for others.**
+Programmable stablecoin vesting on-chain.
 
 Flowvest is a non-custodial protocol built on Base that helps users lock USDC over time using deterministic smart contracts.
 
@@ -57,26 +57,31 @@ Ideal for:
 * Transparent on-chain records
 * Deterministic release schedules
 
+**Locked by code. Not by promises.**
+
 Funds remain governed entirely by smart contract rules.
 
 ---
 ## How It Works
 
 1. Connect wallet
-Any Base-compatible wallet. No signup, no email.
-2. Set the schedule
-Choose amount, duration, and recipient (or yourself).
-3. Wait for unlock
-Funds unlock on time. Nothing else needed.
+2. Choose Save or Vest
+3. Select amount and schedule
+4. Confirm transaction
+5. Funds unlock over time
+6. Claim available releases
 
 ---
 
 ## V1.1
 
 Current configuration:
+- Token: USDC
+- Network: Base Mainnet
+- Min Principal: 200 USDC
+- Max Principal: 3,000 USDC
+- Protocol TVL Cap: 20,000 USDC
 
-* **Token:** USDC
-* **Network:** Base Mainnet
 ## Available Plans
 
 ### Monthly Plan
@@ -94,8 +99,6 @@ Current configuration:
 * **Protocol TVL Cap:** 20,000 USDC
 
 ---
-
-
 
 ## Architecture
 
@@ -124,21 +127,20 @@ Explorer and indexing infrastructure are maintained separately.
 
 Flowvest will evolve gradually as the protocol matures. Early releases prioritize reliability, transparency, and predictable on‑chain behavior.
 
+### V1.1 —  (Current Release)
 
-### V1.1 — Mainnet (Current Release)
-
-* Base mainnet deployment
-* USDC support
-* stabilized UI and infrastructure
+- Save
+- Vest
+- USDC
+- Base Mainnet
+- Explorer support
 
 ### V2 — Protocol Expansion
 
-Planned direction:
-
-* flexible vest durations
-* improved vest management
-* protocol fee model
-* additional stablecoins
+- Flexible vest durations
+- Protocol fee model
+- Additional stablecoins
+- Enhanced vest management
 
 ### Future Direction
 

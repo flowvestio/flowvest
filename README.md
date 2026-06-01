@@ -6,15 +6,38 @@
 
 **Programmable stablecoin vesting on-chain.**
 
-Flowvest is a lightweight protocol that allows users to schedule stablecoin payments over time using deterministic vesting smart contracts.
+Save for yourself. Vest for others.
+
+Flowvest is a non-custodial protocol built on Base that helps users lock USDC over time using deterministic smart contracts.
+
+Whether you’re saving for your future self or scheduling payments to someone else, Flowvest keeps funds locked by code — not by promises.
 
 ---
 
-## Status
+## Core Products
 
-Flowvest V1 is currently in Base Mainnet.
+Save
 
-Please use small USDC test amounts and review transactions carefully.
+Lock USDC for yourself and release it gradually over time.
+
+Ideal for:
+
+* long-term saving
+* budgeting
+* self-discipline
+* delayed spending
+
+Vest
+
+Create a vesting schedule for another wallet.
+
+Ideal for:
+
+* family support
+* allowances
+* contributor payments
+* milestone-based payouts
+* payroll distribution
 
 ---
 
@@ -24,42 +47,47 @@ Please use small USDC test amounts and review transactions carefully.
 * **Explorer:** [https://scan.flowvest.io](https://scan.flowvest.io)
 * **Network:** Base Mainnet
 * **Asset:** USDC
-
 ---
 
-## What Flowvest Does
+## Why Flowvest
+* Non-custodial
+* No yield
+* No lending
+* No rehypothecation
+* Transparent on-chain records
+* Deterministic release schedules
 
-Flowvest enables users to create simple on-chain payment schedules using stablecoins.
-
-Typical use cases include:
-
-* scheduled payments
-* milestone-based payouts
-* contributor vesting
-* personal time‑locked savings
-
-All vest schedules are transparent and verifiable on-chain.
+Funds remain governed entirely by smart contract rules.
 
 ---
-
 ## How It Works
 
 1. Connect wallet
-2. Approve USDC
-3. Create a vest schedule
-4. Funds unlock over time
-5. Beneficiary claims available amounts
-6. Owner may terminate within the allowed window
+Any Base-compatible wallet. No signup, no email.
+2. Set the schedule
+Choose amount, duration, and recipient (or yourself).
+3. Wait for unlock
+Funds unlock on time. Nothing else needed.
 
 ---
 
-## V1 Early Access
+## V1.1
 
 Current configuration:
 
 * **Token:** USDC
 * **Network:** Base Mainnet
-* **Periods:** 3
+## Available Plans
+
+### Monthly Plan
+- Every 30 days
+- 3 releases
+- ~3 months
+
+### Biweekly Plan
+- Every 14 days
+- 6 releases
+- ~3 months
 * **Period Length:** 30 days
 * **Min Principal:** 200 USDC
 * **Max Principal:** 3,000 USDC
@@ -67,14 +95,7 @@ Current configuration:
 
 ---
 
-## Termination Rule
 
-Termination is allowed:
-
-* after period 2 begins
-* before period 3 completes
-
----
 
 ## Architecture
 
@@ -103,14 +124,8 @@ Explorer and indexing infrastructure are maintained separately.
 
 Flowvest will evolve gradually as the protocol matures. Early releases prioritize reliability, transparency, and predictable on‑chain behavior.
 
-### V1 — Public Beta
 
-* Base Sepolia deployment
-* USDC vesting schedules
-* Claim and terminate flows
-* Explorer + API support
-
-### V1 — Mainnet (Current Phase)
+### V1.1 — Mainnet (Current Release)
 
 * Base mainnet deployment
 * USDC support

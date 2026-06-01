@@ -81,7 +81,7 @@ Current configuration:
 - Network: Base Mainnet
 - Min Principal: 200 USDC
 - Max Principal: 3,000 USDC
-- Protocol TVL Cap: 20,000 USDC
+- Protocol TVL Cap: 30,000 USDC
 
 ## Available Plans
 
@@ -94,11 +94,10 @@ Current configuration:
 - Every 14 days
 - 6 releases
 - ~3 months
-* **Period Length:** 30 days
-* **Min Principal:** 200 USDC
-* **Max Principal:** 3,000 USDC
-* **Protocol TVL Cap:** 20,000 USDC
 
+## Saving Plan
+- 3-18 months
+  
 ---
 
 ## Architecture

@@ -6,6 +6,7 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 **Save for yourself. Vest for others.**
+
 Programmable stablecoin vesting on-chain.
 
 Flowvest is a non-custodial protocol built on Base that helps users lock USDC over time using deterministic smart contracts.

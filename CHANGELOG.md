@@ -6,7 +6,7 @@ The format loosely follows Keep a Changelog and semantic versioning.
 
 ---
 
-## v1.0.0 — Early Access 
+## v1.0 — Early Access 
 Release date: 2026-03-25
 
 ### Added
@@ -25,7 +25,7 @@ Release date: 2026-03-25
 
 ---
 
-## v1.0.1
+## v1.1
 
 ### Fixed
 - Claim button state synchronization
@@ -39,7 +39,7 @@ Release date: 2026-03-25
 
 ---
 
-## v1.0.2
+## v2
 
 ### Improved
 - API refresh logic
